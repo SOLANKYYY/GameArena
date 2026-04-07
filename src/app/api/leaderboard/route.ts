@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
+import { requireAdmin } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    requireAdmin(req);
     const db = getDb();
     const leaderboard = db.prepare(
       "SELECT id, username, team_name as teamName, balance FROM users WHERE role = 'player' ORDER BY balance DESC LIMIT 20"
@@ -10,6 +12,7 @@ export async function GET() {
 
     return NextResponse.json({ leaderboard });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const status = error.message === 'Forbidden' ? 403 : error.message === 'Unauthorized' ? 401 : 500;
+    return NextResponse.json({ error: error.message }, { status });
   }
 }

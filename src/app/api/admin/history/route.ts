@@ -10,7 +10,10 @@ export async function GET(req: NextRequest) {
     
     const { searchParams } = new URL(req.url);
     const game = searchParams.get('game');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limitRaw = parseInt(searchParams.get('limit') || '100');
+    const limit = Math.min(Math.max(1, isNaN(limitRaw) ? 100 : limitRaw), 200);
+    const validGames = ['limbo', 'dice', 'mines', 'moles', 'wheel', 'plinko', 'keno'];
+    const safeGame = game && validGames.includes(game) ? game : null;
     
     let query = `
       SELECT b.id, b.game, b.bet_amount as betAmount, b.outcome, b.payout, b.multiplier, 
@@ -20,9 +23,9 @@ export async function GET(req: NextRequest) {
     `;
     const params: any[] = [];
     
-    if (game) {
+    if (safeGame) {
       query += ' WHERE b.game = ?';
-      params.push(game);
+      params.push(safeGame);
     }
     
     query += ' ORDER BY b.created_at DESC LIMIT ?';

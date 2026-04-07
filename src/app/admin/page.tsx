@@ -26,6 +26,7 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [historyFilter, setHistoryFilter] = useState('');
   const [balanceAction, setBalanceAction] = useState<{ userId: number; action: string; amount: string } | null>(null);
+  const [leaderboardLastUpdated, setLeaderboardLastUpdated] = useState<Date | null>(null);
 
   // Team management state
   const [showAddTeam, setShowAddTeam] = useState(false);
@@ -68,6 +69,24 @@ export default function AdminPage() {
     const interval = setInterval(() => { fetchStats(); fetchSessions(); }, 10000);
     return () => clearInterval(interval);
   }, [token, user, fetchStats, fetchSessions]);
+
+  // Auto-refresh teams (for live leaderboard) every 5s when on leaderboard tab
+  useEffect(() => {
+    if (!token || user?.role !== 'admin' || activeTab !== 'leaderboard') return;
+    const interval = setInterval(() => {
+      fetchTeams();
+      setLeaderboardLastUpdated(new Date());
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [token, user, activeTab, fetchTeams]);
+
+  // Immediately refresh teams when switching to leaderboard tab
+  useEffect(() => {
+    if (activeTab === 'leaderboard' && token) {
+      fetchTeams();
+      setLeaderboardLastUpdated(new Date());
+    }
+  }, [activeTab, token, fetchTeams]);
 
   const handleBalanceUpdate = async () => {
     if (!balanceAction) return;
@@ -468,9 +487,21 @@ export default function AdminPage() {
         {/* Leaderboard Tab */}
         {activeTab === 'leaderboard' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--accent-green)', fontWeight: 600 }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-green)', display: 'inline-block', animation: 'pulse-green 2s infinite' }} />
+                LIVE
+              </span>
+              {leaderboardLastUpdated && (
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Updated {leaderboardLastUpdated.toLocaleTimeString()}
+                </span>
+              )}
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' }}>Auto-refreshes every 5s</span>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {teams.filter(t => t.role === 'player').sort((a, b) => b.balance - a.balance).map((team, i) => (
-                <div key={team.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+                <div key={team.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderRadius: '12px', background: 'var(--bg-secondary)', border: `1px solid ${i === 0 ? '#fbbf2440' : i === 1 ? '#94a3b830' : i === 2 ? '#cd7f3230' : 'var(--border)'}` }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                     <span style={{ width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800, background: i === 0 ? '#fbbf2422' : i === 1 ? '#94a3b822' : i === 2 ? '#cd7f3222' : 'var(--bg-primary)', color: i === 0 ? '#fbbf24' : i === 1 ? '#94a3b8' : i === 2 ? '#cd7f32' : 'var(--text-muted)' }}>{i + 1}</span>
                     <div>
@@ -481,6 +512,9 @@ export default function AdminPage() {
                   <p className="font-mono" style={{ fontSize: '18px', fontWeight: 800, color: 'var(--accent-green)' }}>{team.balance.toFixed(2)}</p>
                 </div>
               ))}
+              {teams.filter(t => t.role === 'player').length === 0 && (
+                <p style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px solid var(--border)' }}>No teams yet</p>
+              )}
             </div>
           </motion.div>
         )}

@@ -13,7 +13,11 @@ function getDb(): Database.Database {
     db = new Database(dbPath);
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
-    db.pragma('busy_timeout = 5000');
+    db.pragma('busy_timeout = 10000');  // 10s – enough for burst concurrency
+    db.pragma('synchronous = NORMAL');  // Safe with WAL; faster than FULL
+    db.pragma('cache_size = -32000');   // 32 MB page cache
+    db.pragma('temp_store = MEMORY');   // Temp tables in RAM
+    db.pragma('mmap_size = 268435456'); // 256 MB memory-mapped I/O
     initializeDb(db);
   }
   return db;

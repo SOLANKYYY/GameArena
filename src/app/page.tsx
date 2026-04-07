@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import Navbar from '@/components/Navbar';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 const games = [
   { id: 'limbo', name: 'Limbo', icon: '🚀', description: 'Set a target multiplier and watch the crash point soar.', accent: '#4dabf7', accentDim: 'rgba(77,171,247,0.12)' },
@@ -27,28 +27,16 @@ interface RecentBet {
   teamName: string;
 }
 
-interface LeaderboardEntry {
-  id: number; username: string; teamName: string; balance: number;
-}
-
 const gameIcons: Record<string, string> = { limbo: '🚀', dice: '🎲', mines: '💎', moles: '🔨', wheel: '🎡', plinko: '📍', keno: '🎯' };
-const rankBadges = ['🥇', '🥈', '🥉'];
 
 export default function HomePage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [recentBets, setRecentBets] = useState<RecentBet[]>([]);
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');
   }, [user, loading, router]);
-
-  useEffect(() => {
-    if (token) {
-      fetch('/api/leaderboard').then(r => r.json()).then(d => setLeaderboard(d.leaderboard || [])).catch(() => {});
-    }
-  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -198,82 +186,38 @@ export default function HomePage() {
           </motion.section>
         )}
 
-        {/* ═══ BOTTOM SECTION: Leaderboard + History ═══ */}
-        <div className="lobby-bottom-grid">
-          {/* Leaderboard */}
-          <motion.section
-            className="lobby-panel"
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7, duration: 0.5, ease: [0.2, 0, 0, 1] }}
-          >
-            <div className="lobby-panel-header">
-              <h3 className="lobby-panel-title">🏆 Leaderboard</h3>
-              <span className="lobby-panel-badge">Top 10</span>
-            </div>
-            <div className="lobby-leaderboard-list">
-              {leaderboard.length === 0 ? (
-                <p className="lobby-empty-state">No players yet. Be the first!</p>
-              ) : (
-                leaderboard.slice(0, 10).map((entry, i) => (
-                  <motion.div
-                    key={entry.id}
-                    className={`lobby-leaderboard-row ${entry.teamName === user.teamName ? 'lobby-leaderboard-you' : ''} ${i < 3 ? 'lobby-leaderboard-top' : ''}`}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.75 + i * 0.04 }}
-                  >
-                    <div className="lobby-leaderboard-left">
-                      <span className={`lobby-rank-badge lobby-rank-${i}`}>
-                        {i < 3 ? rankBadges[i] : i + 1}
-                      </span>
-                      <span className="lobby-leaderboard-name">
-                        {entry.teamName}
-                        {entry.teamName === user.teamName && <span className="lobby-you-tag">YOU</span>}
-                      </span>
-                    </div>
-                    <span className="lobby-leaderboard-balance font-mono">
-                      {entry.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </span>
-                  </motion.div>
-                ))
-              )}
-            </div>
-          </motion.section>
-
-          {/* Recent Bets */}
-          <motion.section
-            className="lobby-panel"
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.75, duration: 0.5, ease: [0.2, 0, 0, 1] }}
-          >
-            <div className="lobby-panel-header">
-              <h3 className="lobby-panel-title">📜 Recent Bets</h3>
-              <span className="lobby-panel-badge">Your Activity</span>
-            </div>
-            <div className="lobby-history-list">
-              {recentBets.filter(b => b.teamName === user.teamName).length === 0 ? (
-                <p className="lobby-empty-state">No bets yet. Play a game to start!</p>
-              ) : (
-                recentBets.filter(b => b.teamName === user.teamName).slice(0, 8).map((bet) => (
-                  <div key={bet.id} className="lobby-history-row">
-                    <div className="lobby-history-left">
-                      <span className="lobby-history-icon">{gameIcons[bet.game] || '🎮'}</span>
-                      <div className="lobby-history-info">
-                        <span className="lobby-history-game">{bet.game}</span>
-                        <span className="lobby-history-bet font-mono">{bet.betAmount.toFixed(2)}</span>
-                      </div>
-                    </div>
-                    <div className={`lobby-history-result font-mono ${bet.outcome === 'win' ? 'lobby-win' : 'lobby-loss'}`}>
-                      {bet.outcome === 'win' ? `+${bet.payout.toFixed(2)}` : `-${bet.betAmount.toFixed(2)}`}
+        {/* ═══ RECENT BETS ═══ */}
+        <motion.section
+          className="lobby-panel"
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7, duration: 0.5, ease: [0.2, 0, 0, 1] }}
+        >
+          <div className="lobby-panel-header">
+            <h3 className="lobby-panel-title">📜 Recent Bets</h3>
+            <span className="lobby-panel-badge">Your Activity</span>
+          </div>
+          <div className="lobby-history-list">
+            {recentBets.filter(b => b.teamName === user.teamName).length === 0 ? (
+              <p className="lobby-empty-state">No bets yet. Play a game to start!</p>
+            ) : (
+              recentBets.filter(b => b.teamName === user.teamName).slice(0, 8).map((bet) => (
+                <div key={bet.id} className="lobby-history-row">
+                  <div className="lobby-history-left">
+                    <span className="lobby-history-icon">{gameIcons[bet.game] || '🎮'}</span>
+                    <div className="lobby-history-info">
+                      <span className="lobby-history-game">{bet.game}</span>
+                      <span className="lobby-history-bet font-mono">{bet.betAmount.toFixed(2)}</span>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          </motion.section>
-        </div>
+                  <div className={`lobby-history-result font-mono ${bet.outcome === 'win' ? 'lobby-win' : 'lobby-loss'}`}>
+                    {bet.outcome === 'win' ? `+${bet.payout.toFixed(2)}` : `-${bet.betAmount.toFixed(2)}`}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </motion.section>
       </main>
     </div>
   );

@@ -21,7 +21,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No active session found' }, { status: 404 });
     }
 
-    const state = JSON.parse(session.state);
+    let state: any;
+    try {
+      state = JSON.parse(session.state);
+    } catch {
+      return NextResponse.json({ error: 'Corrupted session state' }, { status: 500 });
+    }
     const minePositions: number[] = state.minePositions;
     const revealedPositions: number[] = state.revealedPositions;
 

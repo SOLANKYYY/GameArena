@@ -7,7 +7,11 @@ import { MOLES_HOLES } from '@/lib/constants';
 export async function POST(req: NextRequest) {
   try {
     const user = requireAuth(req);
-    const { sessionId, action, roundHits, roundMisses } = await req.json();
+    const body = await req.json();
+    const { sessionId, action } = body;
+    const roundHits = Number.isInteger(body.roundHits) && body.roundHits >= 0 ? body.roundHits : 0;
+    const roundMisses = Number.isInteger(body.roundMisses) && body.roundMisses >= 0 ? body.roundMisses : 0;
+    void roundMisses; // derived server-side anyway
 
     const db = getDb();
     const session = db.prepare(
@@ -18,7 +22,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No active session found' }, { status: 404 });
     }
 
-    const state = JSON.parse(session.state);
+    let state: any;
+    try {
+      state = JSON.parse(session.state);
+    } catch {
+      return NextResponse.json({ error: 'Corrupted session state' }, { status: 500 });
+    }
 
     if (action === 'round_complete') {
       // Record round results

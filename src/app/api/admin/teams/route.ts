@@ -81,6 +81,13 @@ export async function POST(req: NextRequest) {
 
     // Otherwise, update balance (existing logic)
     const { userId, action, amount } = body;
+    if (!['set', 'add', 'deduct'].includes(action)) {
+      return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    }
+    if (amount === undefined || !Number.isFinite(Number(amount)) || Number(amount) < 0) {
+      return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
+    }
+    const safeAmount = Math.round(Number(amount) * 100) / 100;
     const user = db.prepare('SELECT balance FROM users WHERE id = ?').get(userId) as any;
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -88,11 +95,11 @@ export async function POST(req: NextRequest) {
 
     let newBalance = user.balance;
     if (action === 'set') {
-      newBalance = amount;
+      newBalance = safeAmount;
     } else if (action === 'add') {
-      newBalance = user.balance + amount;
+      newBalance = user.balance + safeAmount;
     } else if (action === 'deduct') {
-      newBalance = Math.max(0, user.balance - amount);
+      newBalance = Math.max(0, user.balance - safeAmount);
     }
 
     newBalance = Math.round(newBalance * 100) / 100;

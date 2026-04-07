@@ -5,6 +5,7 @@ import getDb from '@/lib/db';
 // GET all recent bets across all users (for live ticker)
 export async function GET(req: NextRequest) {
   try {
+    requireAuth(req); // Must be logged in
     const db = getDb();
     const { searchParams } = new URL(req.url);
     const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50);
