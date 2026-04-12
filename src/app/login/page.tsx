@@ -1,10 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+
+function ArenaLogoLarge() {
+  return (
+    <svg width="64" height="64" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="logoGradLg" x1="0" y1="0" x2="36" y2="36">
+          <stop offset="0%" stopColor="#00e701" />
+          <stop offset="100%" stopColor="#7dff67" />
+        </linearGradient>
+      </defs>
+      <rect width="36" height="36" rx="10" fill="url(#logoGradLg)" />
+      <path
+        d="M18 8L26 12V19C26 23.5 22.5 27 18 28.5C13.5 27 10 23.5 10 19V12L18 8Z"
+        fill="rgba(255,255,255,0.15)"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="0.8"
+      />
+      <path d="M14 22L22 14" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M22 22L14 14" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+      <rect x="16" y="16" width="4" height="4" rx="1" fill="white" transform="rotate(45 18 18)" />
+    </svg>
+  );
+}
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -13,8 +36,13 @@ export default function LoginPage() {
   const { login, user } = useAuth();
   const router = useRouter();
 
+  useEffect(() => {
+    if (user) {
+      router.push('/');
+    }
+  }, [user, router]);
+
   if (user) {
-    router.push('/');
     return null;
   }
 
@@ -33,87 +61,31 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--bg-primary)',
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
-      {/* Background glow */}
-      <div style={{
-        position: 'absolute',
-        top: '-200px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: '600px',
-        height: '600px',
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(0,231,1,0.08) 0%, transparent 70%)',
-        pointerEvents: 'none',
-      }} />
+    <div className="login-root">
+      {/* Background effects */}
+      <div className="login-bg-glow login-bg-glow-1" />
+      <div className="login-bg-glow login-bg-glow-2" />
+      <div className="login-bg-grid" />
 
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        style={{
-          width: '100%',
-          maxWidth: '420px',
-          padding: '24px',
-        }}
+        className="login-container"
       >
         {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #00e701, #00b300)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '28px',
-            fontWeight: 900,
-            color: '#0f1923',
-            marginBottom: '16px',
-          }}>
-            G
+        <div className="login-logo-section">
+          <div className="login-logo-glow">
+            <ArenaLogoLarge />
           </div>
-          <h1 style={{
-            fontSize: '28px',
-            fontWeight: 800,
-            color: 'var(--text-primary)',
-            marginBottom: '8px',
-          }}>
-            Game Arena
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-            Sign in to start playing
-          </p>
+          <h1 className="login-title">Game Arena</h1>
+          <p className="login-subtitle">Sign in to start playing</p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border)',
-          borderRadius: '16px',
-          padding: '32px',
-        }}>
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: 'var(--text-secondary)',
-              marginBottom: '8px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}>
-              Username
-            </label>
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="login-field">
+            <label className="login-label">Username</label>
             <input
               id="login-username"
               type="text"
@@ -121,34 +93,12 @@ export default function LoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter username"
               required
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                borderRadius: '10px',
-                border: '1px solid var(--border)',
-                background: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '15px',
-                outline: 'none',
-                transition: 'border-color 0.2s',
-              }}
-              onFocus={(e) => e.target.style.borderColor = 'var(--accent-green)'}
-              onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+              className="login-input"
             />
           </div>
 
-          <div style={{ marginBottom: '28px' }}>
-            <label style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: 'var(--text-secondary)',
-              marginBottom: '8px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}>
-              Password
-            </label>
+          <div className="login-field" style={{ marginBottom: '28px' }}>
+            <label className="login-label">Password</label>
             <input
               id="login-password"
               type="password"
@@ -156,19 +106,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password"
               required
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                borderRadius: '10px',
-                border: '1px solid var(--border)',
-                background: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '15px',
-                outline: 'none',
-                transition: 'border-color 0.2s',
-              }}
-              onFocus={(e) => e.target.style.borderColor = 'var(--accent-green)'}
-              onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+              className="login-input"
             />
           </div>
 
@@ -176,30 +114,13 @@ export default function LoginPage() {
             id="login-submit"
             type="submit"
             disabled={isLoading}
-            style={{
-              width: '100%',
-              padding: '14px',
-              borderRadius: '10px',
-              border: 'none',
-              background: isLoading ? 'var(--border)' : 'linear-gradient(135deg, #00e701, #00b300)',
-              color: '#0f1923',
-              fontSize: '16px',
-              fontWeight: 700,
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s',
-              letterSpacing: '-0.01em',
-            }}
+            className="login-submit-btn"
           >
             {isLoading ? '⏳ Signing in...' : 'Sign In'}
           </button>
         </form>
 
-        <p style={{
-          textAlign: 'center',
-          marginTop: '20px',
-          fontSize: '13px',
-          color: 'var(--text-muted)',
-        }}>
+        <p className="login-footer">
           Contact your admin to get team credentials
         </p>
       </motion.div>

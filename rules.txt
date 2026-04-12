@@ -1,0 +1,30 @@
+# BitArena Casino Challenge - Rules and Regulations
+
+Welcome to BitArena, the ultimate tech fest casino betting platform! Form your team, manage your risk, and climb the leaderboard. May the odds be ever in your favor.
+
+## General Gameplay
+
+1. **Initial Bankroll**: Every team starts with a fixed balance of Arena Coins. 
+2. **The Objective**: Grow your balance as much as possible by the end of the event. The team with the highest balance when the timer stops will be crowned the BitArena Champions!
+3. **Provably Fair**: All game outcomes are generated server-side using secure random number generation (RNG). It's all about luck, risk management, and strategy.
+4. **House Edge**: Like any real casino, all games have a slight house edge. Play smart!
+
+## The Games
+
+1. **Dice**: Set your win chance. Roll underneath or over the target number to win the associated multiplier.
+2. **Keno**: Pick your lucky numbers from the grid! The more numbers you match from the drawn sequence, the higher your payout.
+3. **Limbo**: Set a target payout multiplier. If the randomly generated multiplier is higher than your target, you win your target multiplier!
+4. **Mines**: Uncover gems to increase your current multiplier, but don't hit a mine! You can "Cash Out" at any time to secure your winnings.
+5. **Moles**: A game of fast reactions! Whack the moles to build your multiplier before time runs out or you hit a dud.
+6. **Plinko**: Drop the ball into the peg maze. Your payout is determined by the multiplier bucket the ball lands in at the bottom.
+7. **Wheel**: Spin the wheel of fortune. Choose your risk segment and hope the flapper lands on a high multiplier!
+
+## Rules and Regulations
+
+1. **No External Attacks**: This is a simulated casino, not a pentesting challenge. Do not attempt to DDoS the server, spam or brute-force API endpoints, or disrupt other teams' gameplay. Any such actions will result in immediate disqualification.
+2. **Fair Play & Collusion**: While team members should collaborate under their designated account, pooling balances across different registered teams or attempting to hack fund transfers is strictly prohibited.
+3. **Bug Discovery**: If you discover an application bug or exploit in the game logic (e.g., negative balance betting, race conditions), report it to the admins immediately! Arbitrarily exploiting bugs to gain balance will nullify your score, but responsibly reporting them to the organizers might earn you a bonus reward.
+4. **Live Leaderboard**: Keep an eye on your competition. The leaderboard updates in real-time.
+5. **Final Call**: In case of any technical issues, lag spikes, or disputes, the event admins' ruling is final.
+
+Good luck, play aggressively but wisely, and see you on the leaderboard!

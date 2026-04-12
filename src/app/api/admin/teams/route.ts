@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import getDb from '@/lib/db';
+import getDb, { getNextSequence } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { DEFAULT_STARTING_BALANCE } from '@/lib/constants';
 import { generateServerSeed, hashServerSeed, generateClientSeed } from '@/lib/rng';
@@ -9,19 +9,50 @@ import { generateServerSeed, hashServerSeed, generateClientSeed } from '@/lib/rn
 export async function GET(req: NextRequest) {
   try {
     requireAdmin(req);
-    const db = getDb();
-    
-    const teams = db.prepare(`
-      SELECT 
-        u.id, u.username, u.team_name as teamName, u.balance, u.role, u.created_at as createdAt,
-        COALESCE(COUNT(b.id), 0) as totalBets,
-        COALESCE(SUM(CASE WHEN b.outcome = 'win' THEN b.payout ELSE 0 END), 0) as totalWon,
-        COALESCE(SUM(CASE WHEN b.outcome = 'loss' THEN b.bet_amount ELSE 0 END), 0) as totalLost
-      FROM users u
-      LEFT JOIN bets b ON u.id = b.user_id
-      GROUP BY u.id
-      ORDER BY u.balance DESC
-    `).all();
+    const db = await getDb();
+    const users = db.collection('users');
+
+    const teams = await users
+      .aggregate([
+        {
+          $lookup: {
+            from: 'bets',
+            let: { userId: '$id' },
+            pipeline: [
+              { $match: { $expr: { $eq: ['$user_id', '$$userId'] } } },
+              {
+                $group: {
+                  _id: null,
+                  totalBets: { $sum: 1 },
+                  totalWon: {
+                    $sum: { $cond: [{ $eq: ['$outcome', 'win'] }, '$payout', 0] }
+                  },
+                  totalLost: {
+                    $sum: { $cond: [{ $eq: ['$outcome', 'loss'] }, '$bet_amount', 0] }
+                  }
+                }
+              }
+            ],
+            as: 'betStats',
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            id: 1,
+            username: 1,
+            teamName: '$team_name',
+            balance: 1,
+            role: 1,
+            createdAt: '$created_at',
+            totalBets: { $ifNull: [{ $arrayElemAt: ['$betStats.totalBets', 0] }, 0] },
+            totalWon: { $ifNull: [{ $arrayElemAt: ['$betStats.totalWon', 0] }, 0] },
+            totalLost: { $ifNull: [{ $arrayElemAt: ['$betStats.totalLost', 0] }, 0] },
+          },
+        },
+        { $sort: { balance: -1 } },
+      ])
+      .toArray();
 
     return NextResponse.json({ teams });
   } catch (error: any) {
@@ -34,8 +65,14 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     requireAdmin(req);
-    const body = await req.json();
-    const db = getDb();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const db = await getDb();
+    const users = db.collection('users');
 
     // If "createTeam" flag is set, create a new team
     if (body.createTeam) {
@@ -54,7 +91,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Team name must be at least 2 characters' }, { status: 400 });
       }
 
-      const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+      const existing = await users.findOne({ username });
       if (existing) {
         return NextResponse.json({ error: 'Username already taken' }, { status: 409 });
       }
@@ -62,15 +99,26 @@ export async function POST(req: NextRequest) {
       const hash = bcrypt.hashSync(password, 10);
       const serverSeed = generateServerSeed();
       const clientSeed = generateClientSeed();
+      const newId = await getNextSequence(db, 'userId');
 
-      const result = db.prepare(
-        'INSERT INTO users (username, password_hash, team_name, balance, role, client_seed, server_seed, server_seed_hash, nonce) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(username, hash, teamName, DEFAULT_STARTING_BALANCE, 'player', clientSeed, serverSeed, hashServerSeed(serverSeed), 0);
+      await users.insertOne({
+        id: newId,
+        username,
+        password_hash: hash,
+        team_name: teamName,
+        balance: DEFAULT_STARTING_BALANCE,
+        role: 'player',
+        client_seed: clientSeed,
+        server_seed: serverSeed,
+        server_seed_hash: hashServerSeed(serverSeed),
+        nonce: 0,
+        created_at: new Date(),
+      });
 
       return NextResponse.json({
         success: true,
         team: {
-          id: Number(result.lastInsertRowid),
+          id: newId,
           username,
           teamName,
           balance: DEFAULT_STARTING_BALANCE,
@@ -88,7 +136,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
     }
     const safeAmount = Math.round(Number(amount) * 100) / 100;
-    const user = db.prepare('SELECT balance FROM users WHERE id = ?').get(userId) as any;
+    const user = await users.findOne({ id: userId }) as any;
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -103,7 +151,7 @@ export async function POST(req: NextRequest) {
     }
 
     newBalance = Math.round(newBalance * 100) / 100;
-    db.prepare('UPDATE users SET balance = ? WHERE id = ?').run(newBalance, userId);
+    await users.updateOne({ id: userId }, { $set: { balance: newBalance } });
 
     return NextResponse.json({ success: true, newBalance });
   } catch (error: any) {
@@ -116,8 +164,9 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     requireAdmin(req);
-    const db = getDb();
-    db.prepare("UPDATE users SET balance = ? WHERE role = 'player'").run(DEFAULT_STARTING_BALANCE);
+    const db = await getDb();
+    const users = db.collection('users');
+    await users.updateMany({ role: 'player' }, { $set: { balance: DEFAULT_STARTING_BALANCE } });
     return NextResponse.json({ success: true, message: `All balances reset to ${DEFAULT_STARTING_BALANCE}` });
   } catch (error: any) {
     const status = error.message === 'Forbidden' ? 403 : error.message === 'Unauthorized' ? 401 : 500;
@@ -129,14 +178,21 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     requireAdmin(req);
-    const { userId } = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { userId } = body;
 
     if (!userId) {
       return NextResponse.json({ error: 'userId is required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId) as any;
+    const db = await getDb();
+    const users = db.collection('users');
+    const user = await users.findOne({ id: userId }) as any;
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -144,10 +200,12 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Cannot delete admin accounts' }, { status: 403 });
     }
 
-    // Delete related records first (foreign key constraints)
-    db.prepare('DELETE FROM game_sessions WHERE user_id = ?').run(userId);
-    db.prepare('DELETE FROM bets WHERE user_id = ?').run(userId);
-    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    // Delete related records first
+    const gameSessions = db.collection('game_sessions');
+    const bets = db.collection('bets');
+    await gameSessions.deleteMany({ user_id: userId });
+    await bets.deleteMany({ user_id: userId });
+    await users.deleteOne({ id: userId });
 
     return NextResponse.json({ success: true, message: 'Team deleted successfully' });
   } catch (error: any) {

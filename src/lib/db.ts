@@ -1,122 +1,215 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { MongoClient, Db } from 'mongodb';
 import bcrypt from 'bcryptjs';
 import { DEFAULT_STARTING_BALANCE, ALL_GAMES } from './constants';
 import { generateServerSeed, hashServerSeed, generateClientSeed } from './rng';
 
-const dbPath = path.join(process.cwd(), 'game-arena.db');
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://hacktozite_db_user:WhatDaDogDoin%4001@gamearenainfinity.pxnwxf4.mongodb.net/?appName=GameArenaInfinity';
+const DB_NAME = process.env.DB_NAME || 'GameArenaInfinity';
 
-let db: Database.Database;
+let client: MongoClient | null = null;
+let db: Db | null = null;
+let initPromise: Promise<Db> | null = null;
 
-function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(dbPath);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    db.pragma('busy_timeout = 10000');  // 10s – enough for burst concurrency
-    db.pragma('synchronous = NORMAL');  // Safe with WAL; faster than FULL
-    db.pragma('cache_size = -32000');   // 32 MB page cache
-    db.pragma('temp_store = MEMORY');   // Temp tables in RAM
-    db.pragma('mmap_size = 268435456'); // 256 MB memory-mapped I/O
-    initializeDb(db);
-  }
-  return db;
+export interface UserDoc {
+  _id?: any;
+  id: number;
+  username: string;
+  password_hash: string;
+  team_name: string;
+  balance: number;
+  role: 'player' | 'admin';
+  client_seed: string;
+  server_seed: string;
+  server_seed_hash: string;
+  nonce: number;
+  created_at: Date;
 }
 
-function initializeDb(database: Database.Database) {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      team_name TEXT NOT NULL,
-      balance REAL DEFAULT ${DEFAULT_STARTING_BALANCE},
-      role TEXT DEFAULT 'player' CHECK(role IN ('player', 'admin')),
-      client_seed TEXT,
-      server_seed TEXT,
-      server_seed_hash TEXT,
-      nonce INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+export interface BetDoc {
+  _id?: any;
+  id: number;
+  user_id: number;
+  game: string;
+  bet_amount: number;
+  outcome: 'win' | 'loss';
+  payout: number;
+  multiplier: number;
+  details: string;
+  server_seed: string;
+  client_seed: string;
+  nonce: number;
+  created_at: Date;
+}
 
-    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+export interface GameSessionDoc {
+  _id?: any;
+  id: string;
+  user_id: number;
+  game: string;
+  state: string;
+  bet_amount: number;
+  created_at: Date;
+  completed_at: Date | null;
+}
 
-    CREATE TABLE IF NOT EXISTS bets (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      game TEXT NOT NULL,
-      bet_amount REAL NOT NULL,
-      outcome TEXT NOT NULL CHECK(outcome IN ('win', 'loss')),
-      payout REAL DEFAULT 0,
-      multiplier REAL DEFAULT 0,
-      details TEXT,
-      server_seed TEXT,
-      client_seed TEXT,
-      nonce INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    );
+export interface GameSettingDoc {
+  _id?: any;
+  game_name: string;
+  is_active: boolean;
+  min_bet: number;
+  max_bet: number;
+}
 
-    CREATE INDEX IF NOT EXISTS idx_bets_user_created ON bets(user_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_bets_created ON bets(created_at);
+// Counter collection for auto-increment IDs
+interface CounterDoc {
+  _id: string;
+  seq: number;
+}
 
-    CREATE TABLE IF NOT EXISTS game_settings (
-      game_name TEXT PRIMARY KEY,
-      is_active INTEGER DEFAULT 1,
-      min_bet REAL DEFAULT 1,
-      max_bet REAL DEFAULT 1000000
-    );
+async function getNextSequence(database: Db, name: string): Promise<number> {
+  const counters = database.collection<CounterDoc>('counters');
+  const result = await counters.findOneAndUpdate(
+    { _id: name },
+    { $inc: { seq: 1 } },
+    { upsert: true, returnDocument: 'after' }
+  );
+  if (!result || typeof result.seq !== 'number') {
+    throw new Error(`Failed to generate sequence for ${name}`);
+  }
+  return result.seq;
+}
 
-    CREATE TABLE IF NOT EXISTS game_sessions (
-      id TEXT PRIMARY KEY,
-      user_id INTEGER NOT NULL,
-      game TEXT NOT NULL,
-      state TEXT NOT NULL,
-      bet_amount REAL NOT NULL DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      completed_at DATETIME,
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    );
+async function connectAndInit(): Promise<Db> {
+  const newClient = new MongoClient(MONGODB_URI, {
+    maxPoolSize: 50,
+    minPoolSize: 5,
+    maxIdleTimeMS: 60000,
+    connectTimeoutMS: 10000,
+    serverSelectionTimeoutMS: 10000,
+    retryWrites: true,
+    retryReads: true,
+    tls: true,
+    tlsAllowInvalidCertificates: true,
+  });
 
-    CREATE INDEX IF NOT EXISTS idx_sessions_user_game ON game_sessions(user_id, game);
-  `);
+  // Monitor connection drops → reset cached state
+  newClient.on('close', () => {
+    console.warn('[MongoDB] Connection closed. Will reconnect on next request.');
+    db = null;
+    client = null;
+    initPromise = null;
+  });
 
-  // Add columns if they don't exist (migration-safe)
-  try { database.exec('ALTER TABLE users ADD COLUMN client_seed TEXT'); } catch {}
-  try { database.exec('ALTER TABLE users ADD COLUMN server_seed TEXT'); } catch {}
-  try { database.exec('ALTER TABLE users ADD COLUMN server_seed_hash TEXT'); } catch {}
-  try { database.exec('ALTER TABLE users ADD COLUMN nonce INTEGER DEFAULT 0'); } catch {}
-  try { database.exec('ALTER TABLE bets ADD COLUMN server_seed TEXT'); } catch {}
-  try { database.exec('ALTER TABLE bets ADD COLUMN client_seed TEXT'); } catch {}
-  try { database.exec('ALTER TABLE bets ADD COLUMN nonce INTEGER'); } catch {}
+  newClient.on('error', (err) => {
+    console.error('[MongoDB] Connection error:', err.message);
+    db = null;
+    client = null;
+    initPromise = null;
+  });
+
+  await newClient.connect();
+  client = newClient;
+  const newDb = newClient.db(DB_NAME);
+
+  // Create indexes (idempotent)
+  const users = newDb.collection<UserDoc>('users');
+  const bets = newDb.collection<BetDoc>('bets');
+  const gameSessions = newDb.collection<GameSessionDoc>('game_sessions');
+  const gameSettings = newDb.collection<GameSettingDoc>('game_settings');
+
+  await Promise.all([
+    users.createIndex({ username: 1 }, { unique: true }),
+    users.createIndex({ id: 1 }, { unique: true }),
+    bets.createIndex({ user_id: 1, created_at: -1 }),
+    bets.createIndex({ created_at: -1 }),
+    bets.createIndex({ id: 1 }, { unique: true }),
+    gameSessions.createIndex({ user_id: 1, game: 1 }),
+    gameSessions.createIndex({ id: 1 }, { unique: true }),
+    gameSettings.createIndex({ game_name: 1 }, { unique: true }),
+  ]);
 
   // Seed admin account if not exists
-  const adminExists = database.prepare('SELECT id FROM users WHERE username = ?').get('admin');
+  const adminExists = await users.findOne({ username: 'admin' });
   if (!adminExists) {
     const hash = bcrypt.hashSync('admin123', 10);
     const serverSeed = generateServerSeed();
     const clientSeed = generateClientSeed();
-    database.prepare(
-      'INSERT INTO users (username, password_hash, team_name, balance, role, client_seed, server_seed, server_seed_hash, nonce) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run('admin', hash, 'Admin Team', DEFAULT_STARTING_BALANCE, 'admin', clientSeed, serverSeed, hashServerSeed(serverSeed), 0);
+    const adminId = await getNextSequence(newDb, 'userId');
+    await users.insertOne({
+      id: adminId,
+      username: 'admin',
+      password_hash: hash,
+      team_name: 'Admin Team',
+      balance: DEFAULT_STARTING_BALANCE,
+      role: 'admin',
+      client_seed: clientSeed,
+      server_seed: serverSeed,
+      server_seed_hash: hashServerSeed(serverSeed),
+      nonce: 0,
+      created_at: new Date(),
+    });
   }
 
   // Ensure existing users have seeds
-  const usersWithoutSeeds = database.prepare('SELECT id FROM users WHERE server_seed IS NULL').all() as any[];
+  const usersWithoutSeeds = await users.find({ server_seed: { $exists: false } }).toArray();
   for (const u of usersWithoutSeeds) {
     const serverSeed = generateServerSeed();
     const clientSeed = generateClientSeed();
-    database.prepare('UPDATE users SET client_seed = ?, server_seed = ?, server_seed_hash = ?, nonce = 0 WHERE id = ?')
-      .run(clientSeed, serverSeed, hashServerSeed(serverSeed), u.id);
+    await users.updateOne(
+      { id: u.id },
+      {
+        $set: {
+          client_seed: clientSeed,
+          server_seed: serverSeed,
+          server_seed_hash: hashServerSeed(serverSeed),
+          nonce: 0,
+        },
+      }
+    );
   }
 
   // Seed game settings for all 7 games
-  const insertGame = database.prepare(
-    'INSERT OR IGNORE INTO game_settings (game_name, is_active, min_bet, max_bet) VALUES (?, 1, 1, 1000000)'
-  );
   for (const game of ALL_GAMES) {
-    insertGame.run(game);
+    await gameSettings.updateOne(
+      { game_name: game },
+      {
+        $setOnInsert: {
+          game_name: game,
+          is_active: true,
+          min_bet: 1,
+          max_bet: 1000000,
+        },
+      },
+      { upsert: true }
+    );
   }
+
+  db = newDb;
+  console.log(`[MongoDB] Connected to ${DB_NAME}`);
+  return newDb;
 }
+
+export async function getDb(): Promise<Db> {
+  // Fast path: return cached db if connection is alive
+  if (db && client) {
+    return db;
+  }
+
+  if (initPromise) return initPromise;
+
+  // Reset initPromise on failure so future calls don't get a rejected promise forever
+  initPromise = connectAndInit().catch((err) => {
+    console.error('[MongoDB] Init failed:', err.message);
+    db = null;
+    client = null;
+    initPromise = null;
+    throw err;
+  });
+
+  return initPromise;
+}
+
+// Helper to get auto-increment ID
+export { getNextSequence };
 
 export default getDb;

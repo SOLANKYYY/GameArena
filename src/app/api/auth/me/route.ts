@@ -5,8 +5,9 @@ import { requireAuth } from '@/lib/auth';
 export async function GET(req: NextRequest) {
   try {
     const user = requireAuth(req);
-    const db = getDb();
-    const dbUser = db.prepare('SELECT id, username, team_name, balance, role FROM users WHERE id = ?').get(user.userId) as any;
+    const db = await getDb();
+    const users = db.collection('users');
+    const dbUser = await users.findOne({ id: user.userId }) as any;
     
     if (!dbUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });

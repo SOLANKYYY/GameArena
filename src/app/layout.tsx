@@ -11,6 +11,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>
         <AuthProvider>
           <Toaster
@@ -18,19 +26,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             toastOptions={{
               duration: 3000,
               style: {
-                background: '#1a2c38',
-                color: '#fff',
-                border: '1px solid #2f4553',
-                borderRadius: '8px',
+                background: '#17202b',
+                color: '#d9e3f2',
+                border: '1px solid rgba(0, 231, 1, 0.15)',
+                borderRadius: '16px',
                 fontSize: '14px',
+                fontFamily: "'Inter', sans-serif",
+                backdropFilter: 'blur(20px)',
+                boxShadow: '0 0 40px rgba(0, 231, 1, 0.04), 0 8px 24px rgba(0, 0, 0, 0.3)',
               },
               success: {
-                style: { border: '1px solid #00e701', color: '#00e701' },
-                iconTheme: { primary: '#00e701', secondary: '#1a2c38' },
+                style: { border: '1px solid rgba(0, 231, 1, 0.2)', color: '#7dff67' },
+                iconTheme: { primary: '#00e701', secondary: '#0a141e' },
               },
               error: {
-                style: { border: '1px solid #ed4163', color: '#ed4163' },
-                iconTheme: { primary: '#ed4163', secondary: '#1a2c38' },
+                style: { border: '1px solid rgba(255, 180, 171, 0.25)', color: '#ffb4ab' },
+                iconTheme: { primary: '#ffb4ab', secondary: '#0a141e' },
               },
             }}
           />

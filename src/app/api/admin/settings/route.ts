@@ -6,9 +6,13 @@ import { requireAdmin } from '@/lib/auth';
 export async function GET(req: NextRequest) {
   try {
     requireAdmin(req);
-    const db = getDb();
-    const settings = db.prepare('SELECT * FROM game_settings ORDER BY game_name').all();
-    return NextResponse.json({ settings });
+    const db = await getDb();
+    const gameSettings = db.collection('game_settings');
+    const settings = await gameSettings.find({}).sort({ game_name: 1 }).toArray();
+
+    // Strip MongoDB _id for clean response
+    const cleaned = settings.map(({ _id, ...rest }) => rest);
+    return NextResponse.json({ settings: cleaned });
   } catch (error: any) {
     const status = error.message === 'Forbidden' ? 403 : error.message === 'Unauthorized' ? 401 : 500;
     return NextResponse.json({ error: error.message }, { status });
@@ -19,18 +23,30 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     requireAdmin(req);
-    const { gameName, isActive, minBet, maxBet } = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { gameName, isActive, minBet, maxBet } = body;
 
-    const db = getDb();
+    const db = await getDb();
+    const gameSettings = db.collection('game_settings');
 
+    const updateFields: any = {};
     if (isActive !== undefined) {
-      db.prepare('UPDATE game_settings SET is_active = ? WHERE game_name = ?').run(isActive ? 1 : 0, gameName);
+      updateFields.is_active = isActive ? true : false;
     }
     if (minBet !== undefined) {
-      db.prepare('UPDATE game_settings SET min_bet = ? WHERE game_name = ?').run(minBet, gameName);
+      updateFields.min_bet = minBet;
     }
     if (maxBet !== undefined) {
-      db.prepare('UPDATE game_settings SET max_bet = ? WHERE game_name = ?').run(maxBet, gameName);
+      updateFields.max_bet = maxBet;
+    }
+
+    if (Object.keys(updateFields).length > 0) {
+      await gameSettings.updateOne({ game_name: gameName }, { $set: updateFields });
     }
 
     return NextResponse.json({ success: true, gameName, isActive });

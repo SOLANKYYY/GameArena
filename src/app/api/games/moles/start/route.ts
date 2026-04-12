@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { generateFloats, generateMolePositions } from '@/lib/rng';
-import { checkGameActive, deductBet, incrementNonce } from '@/lib/gameHelper';
+import { checkGameActive, checkRoundActive, deductBet, incrementNonce, refundBet } from '@/lib/gameHelper';
 import getDb from '@/lib/db';
 import crypto from 'crypto';
 import { MOLES_HOLES, MOLES_MAX_ROUNDS_1_MOLE, MOLES_MAX_ROUNDS_2_6_MOLES } from '@/lib/constants';
@@ -9,7 +9,14 @@ import { MOLES_HOLES, MOLES_MAX_ROUNDS_1_MOLE, MOLES_MAX_ROUNDS_2_6_MOLES } from
 export async function POST(req: NextRequest) {
   try {
     const user = requireAuth(req);
-    const { betAmount, moleCount } = await req.json();
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { betAmount, moleCount } = body;
 
     if (!betAmount || betAmount <= 0 || !Number.isFinite(betAmount)) {
       return NextResponse.json({ error: 'Invalid bet amount' }, { status: 400 });
@@ -18,22 +25,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Mole count must be between 1 and 6' }, { status: 400 });
     }
 
-    checkGameActive('moles');
+    await checkGameActive('moles');
+    await checkRoundActive(user.role);
 
-    const db = getDb();
-    const dbUser = db.prepare('SELECT balance, server_seed, client_seed, nonce FROM users WHERE id = ?').get(user.userId) as any;
+    const db = await getDb();
+    const users = db.collection('users');
+    const gameSessions = db.collection('game_sessions');
+
+    const dbUser = await users.findOne({ id: user.userId }) as any;
     if (!dbUser || dbUser.balance < betAmount) {
       return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 });
     }
 
     // Cancel existing active sessions
-    db.prepare("UPDATE game_sessions SET completed_at = datetime('now'), state = json_set(state, '$.status', 'cancelled') WHERE user_id = ? AND game = 'moles' AND completed_at IS NULL")
-      .run(user.userId);
+    const activeSessions = await gameSessions.find({ user_id: user.userId, game: 'moles', completed_at: null }).toArray();
+    for (const s of activeSessions) {
+      try {
+        const st = JSON.parse(s.state as string);
+        st.status = 'cancelled';
+        await gameSessions.updateOne({ id: s.id }, { $set: { state: JSON.stringify(st), completed_at: new Date() } });
+      } catch {
+        await gameSessions.updateOne({ id: s.id }, { $set: { completed_at: new Date() } });
+      }
+    }
 
-    const newBalance = deductBet(user.userId, betAmount);
+    const newBalance = await deductBet(user.userId, betAmount);
 
     const maxRounds = moleCount === 1 ? MOLES_MAX_ROUNDS_1_MOLE : MOLES_MAX_ROUNDS_2_6_MOLES;
-    // Pre-generate all rounds' mole positions
     const totalFloatsNeeded = maxRounds * moleCount;
     const floats = generateFloats(dbUser.server_seed, dbUser.client_seed, dbUser.nonce, totalFloatsNeeded);
 
@@ -49,7 +67,7 @@ export async function POST(req: NextRequest) {
       betAmount,
       moleCount,
       maxRounds,
-      rounds, // Pre-generated mole positions per round
+      rounds,
       currentRound: 0,
       hits: 0,
       misses: 0,
@@ -59,11 +77,23 @@ export async function POST(req: NextRequest) {
       nonce: dbUser.nonce,
     };
 
-    db.prepare(
-      'INSERT INTO game_sessions (id, user_id, game, state, bet_amount) VALUES (?, ?, ?, ?, ?)'
-    ).run(sessionId, user.userId, 'moles', JSON.stringify(sessionState), betAmount);
+    // FIX #3: If session insert fails, refund the deducted bet
+    try {
+      await gameSessions.insertOne({
+        id: sessionId,
+        user_id: user.userId,
+        game: 'moles',
+        state: JSON.stringify(sessionState),
+        bet_amount: betAmount,
+        created_at: new Date(),
+        completed_at: null,
+      });
+    } catch (insertErr) {
+      await refundBet(user.userId, betAmount);
+      throw new Error('Failed to create game session. Bet has been refunded.');
+    }
 
-    incrementNonce(user.userId);
+    await incrementNonce(user.userId);
 
     return NextResponse.json({
       sessionId,
@@ -71,7 +101,6 @@ export async function POST(req: NextRequest) {
       moleCount,
       maxRounds,
       newBalance,
-      // Send first round's mole positions
       currentRound: 0,
       molePositions: rounds[0],
       totalHoles: MOLES_HOLES,

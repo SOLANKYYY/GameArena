@@ -6,21 +6,45 @@ import getDb from '@/lib/db';
 export async function GET(req: NextRequest) {
   try {
     requireAuth(req); // Must be logged in
-    const db = getDb();
+    const db = await getDb();
     const { searchParams } = new URL(req.url);
     const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50);
 
-    const recentBets = db.prepare(`
-      SELECT b.id, b.game, b.bet_amount as betAmount, b.outcome, b.payout, b.multiplier,
-             b.created_at as createdAt, u.team_name as teamName
-      FROM bets b
-      JOIN users u ON b.user_id = u.id
-      ORDER BY b.created_at DESC
-      LIMIT ?
-    `).all(limit);
+    const betsCol = db.collection('bets');
+    const usersCol = db.collection('users');
+
+    const recentBets = await betsCol
+      .aggregate([
+        { $sort: { created_at: -1 } },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'user_id',
+            foreignField: 'id',
+            as: 'user',
+          },
+        },
+        { $unwind: '$user' },
+        {
+          $project: {
+            _id: 0,
+            id: 1,
+            game: 1,
+            betAmount: '$bet_amount',
+            outcome: 1,
+            payout: 1,
+            multiplier: 1,
+            createdAt: '$created_at',
+            teamName: '$user.team_name',
+          },
+        },
+      ])
+      .toArray();
 
     return NextResponse.json({ bets: recentBets });
   } catch (error: any) {
+    if (error.message === 'Unauthorized') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

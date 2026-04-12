@@ -1,21 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { calculateMinesMultiplier } from '@/lib/constants';
-import getDb from '@/lib/db';
+import getDb, { getNextSequence } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
   try {
     const user = requireAuth(req);
-    const { sessionId, position } = await req.json();
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { sessionId, position } = body;
 
     if (position === undefined || position < 0 || position > 24 || !Number.isInteger(position)) {
       return NextResponse.json({ error: 'Invalid position (must be 0-24)' }, { status: 400 });
     }
+    if (!sessionId || typeof sessionId !== 'string') {
+      return NextResponse.json({ error: 'Invalid session ID' }, { status: 400 });
+    }
 
-    const db = getDb();
-    const session = db.prepare(
-      "SELECT * FROM game_sessions WHERE id = ? AND user_id = ? AND game = 'mines' AND completed_at IS NULL"
-    ).get(sessionId, user.userId) as any;
+    const db = await getDb();
+    const gameSessions = db.collection('game_sessions');
+    const users = db.collection('users');
+    const betsCol = db.collection('bets');
+
+    const session = await gameSessions.findOne({
+      id: sessionId,
+      user_id: user.userId,
+      game: 'mines',
+      completed_at: null,
+    }) as any;
 
     if (!session) {
       return NextResponse.json({ error: 'No active session found' }, { status: 404 });
@@ -42,23 +59,37 @@ export async function POST(req: NextRequest) {
       state.status = 'busted';
       state.revealedPositions = revealedPositions;
 
-      db.prepare("UPDATE game_sessions SET state = ?, completed_at = datetime('now') WHERE id = ?")
-        .run(JSON.stringify(state), sessionId);
+      await gameSessions.updateOne(
+        { id: sessionId },
+        { $set: { state: JSON.stringify(state), completed_at: new Date() } }
+      );
 
       // Record bet as loss
-      db.prepare(
-        'INSERT INTO bets (user_id, game, bet_amount, outcome, payout, multiplier, details, server_seed, client_seed, nonce) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(user.userId, 'mines', state.betAmount, 'loss', 0, 0,
-        JSON.stringify({ numMines: state.numMines, revealedCount: revealedPositions.length - 1 }),
-        state.serverSeed, state.clientSeed, state.nonce);
+      const betId = await getNextSequence(db, 'betId');
+      await betsCol.insertOne({
+        id: betId,
+        user_id: user.userId,
+        game: 'mines',
+        bet_amount: state.betAmount,
+        outcome: 'loss',
+        payout: 0,
+        multiplier: 0,
+        details: JSON.stringify({ numMines: state.numMines, revealedCount: revealedPositions.length - 1 }),
+        server_seed: state.serverSeed,
+        client_seed: state.clientSeed,
+        nonce: state.nonce,
+        created_at: new Date(),
+      });
 
-      const dbUser = db.prepare('SELECT balance FROM users WHERE id = ?').get(user.userId) as any;
+      // FIX #5: Null guard on user lookup
+      const dbUser = await users.findOne({ id: user.userId }) as any;
+      const currentBalance = dbUser?.balance ?? 0;
 
       return NextResponse.json({
         isMine: true,
         minePositions,
         revealedPositions,
-        newBalance: dbUser.balance,
+        newBalance: currentBalance,
         payout: 0,
       });
     } else {
@@ -69,10 +100,14 @@ export async function POST(req: NextRequest) {
       state.revealedPositions = revealedPositions;
       state.currentMultiplier = newMultiplier;
 
-      db.prepare('UPDATE game_sessions SET state = ? WHERE id = ?')
-        .run(JSON.stringify(state), sessionId);
+      await gameSessions.updateOne(
+        { id: sessionId },
+        { $set: { state: JSON.stringify(state) } }
+      );
 
-      const dbUser = db.prepare('SELECT balance FROM users WHERE id = ?').get(user.userId) as any;
+      // FIX #5: Null guard on user lookup
+      const dbUser = await users.findOne({ id: user.userId }) as any;
+      const currentBalance = dbUser?.balance ?? 0;
       const safeTilesLeft = 25 - state.numMines - safeRevealed.length;
 
       return NextResponse.json({
@@ -82,7 +117,7 @@ export async function POST(req: NextRequest) {
         currentMultiplier: newMultiplier,
         potentialPayout: Math.round(state.betAmount * newMultiplier * 100) / 100,
         safeTilesLeft,
-        newBalance: dbUser.balance,
+        newBalance: currentBalance,
       });
     }
   } catch (error: any) {

@@ -1,9 +1,13 @@
-import getDb from './db';
-import { generateServerSeed, hashServerSeed, generateFloats } from './rng';
+import getDb, { getNextSequence } from './db';
+import { generateFloats } from './rng';
 
 /**
  * Shared helper for provably fair game transactions.
  * Handles: balance check, seed management, nonce increment, bet recording, atomic transactions.
+ * All operations are async for MongoDB compatibility.
+ *
+ * HARDENED: Uses atomic findOneAndUpdate with balance floor guards to prevent
+ * race conditions that could allow negative balances.
  */
 
 export interface GameContext {
@@ -16,9 +20,10 @@ export interface GameContext {
 }
 
 /** Get user's current game context (balance + seeds), generate floats */
-export function getGameContext(userId: number, floatCount: number): GameContext {
-  const db = getDb();
-  const user = db.prepare('SELECT balance, server_seed, client_seed, nonce FROM users WHERE id = ?').get(userId) as any;
+export async function getGameContext(userId: number, floatCount: number): Promise<GameContext> {
+  const db = await getDb();
+  const users = db.collection('users');
+  const user = await users.findOne({ id: userId });
   if (!user) throw new Error('User not found');
 
   const floats = generateFloats(user.server_seed, user.client_seed, user.nonce, floatCount);
@@ -34,19 +39,36 @@ export function getGameContext(userId: number, floatCount: number): GameContext 
 }
 
 /** Check if a game is enabled */
-export function checkGameActive(gameName: string): void {
-  const db = getDb();
-  const game = db.prepare('SELECT is_active FROM game_settings WHERE game_name = ?').get(gameName) as any;
+export async function checkGameActive(gameName: string): Promise<void> {
+  const db = await getDb();
+  const gameSettings = db.collection('game_settings');
+  const game = await gameSettings.findOne({ game_name: gameName });
   if (!game?.is_active) throw new Error(`${gameName} is currently disabled`);
 }
 
+/** Check if a round is currently active (admin must start a timer). Admin users bypass this check. */
+export async function checkRoundActive(userRole?: string): Promise<void> {
+  if (userRole === 'admin') return; // Admin can always play
+  const db = await getDb();
+  const roundConfig = db.collection('round_config');
+  const current = await roundConfig.findOne({ _id: 'current_round' as any });
+  if (!current || !current.is_active) {
+    throw new Error('No active round. Please wait for the admin to start a round.');
+  }
+  // Check if timer has expired
+  if (current.ends_at && new Date(current.ends_at).getTime() < Date.now()) {
+    throw new Error('The current round has ended. Please wait for the next round.');
+  }
+}
+
 /** Validate bet amount against balance and game limits */
-export function validateBet(betAmount: number, balance: number, gameName: string): void {
+export async function validateBet(betAmount: number, balance: number, gameName: string): Promise<void> {
   if (!betAmount || betAmount <= 0 || !Number.isFinite(betAmount)) {
     throw new Error('Invalid bet amount');
   }
-  const db = getDb();
-  const settings = db.prepare('SELECT min_bet, max_bet FROM game_settings WHERE game_name = ?').get(gameName) as any;
+  const db = await getDb();
+  const gameSettings = db.collection('game_settings');
+  const settings = await gameSettings.findOne({ game_name: gameName });
   if (settings) {
     if (betAmount < settings.min_bet) throw new Error(`Minimum bet is ${settings.min_bet}`);
     if (betAmount > settings.max_bet) throw new Error(`Maximum bet is ${settings.max_bet}`);
@@ -62,8 +84,11 @@ export interface BetResult {
   newBalance: number;
 }
 
-/** Record a bet and update balance atomically using a transaction */
-export function recordBet(
+/**
+ * Record a bet and update balance atomically.
+ * Uses findOneAndUpdate with balance floor guard to prevent race conditions.
+ */
+export async function recordBet(
   ctx: GameContext,
   gameName: string,
   betAmount: number,
@@ -71,65 +96,117 @@ export function recordBet(
   payout: number,
   multiplier: number,
   details: object
-): { newBalance: number } {
-  const db = getDb();
+): Promise<{ newBalance: number }> {
+  const db = await getDb();
+  const users = db.collection('users');
+  const bets = db.collection('bets');
 
   const balanceChange = outcome === 'win' ? payout - betAmount : -betAmount;
-  const newBalance = Math.round((ctx.balance + balanceChange) * 100) / 100;
 
-  const txn = db.transaction(() => {
-    // Re-check balance inside transaction to prevent race conditions
-    const currentUser = db.prepare('SELECT balance FROM users WHERE id = ?').get(ctx.userId) as any;
-    if (currentUser.balance < betAmount && outcome !== 'win') {
-      throw new Error('Insufficient balance (race condition)');
-    }
+  // FIX #2: Atomic balance update with floor guard — prevents concurrent bets
+  // from both passing the balance check and going negative.
+  const updateResult = await users.findOneAndUpdate(
+    {
+      id: ctx.userId,
+      // Only allow update if balance can cover the bet (or if it's a win that adds funds)
+      ...(balanceChange < 0 ? { balance: { $gte: betAmount } } : {}),
+    },
+    {
+      $inc: { balance: Math.round(balanceChange * 100) / 100, nonce: 1 },
+    },
+    { returnDocument: 'after' }
+  );
 
-    const finalBalance = Math.round((currentUser.balance + balanceChange) * 100) / 100;
+  if (!updateResult) {
+    throw new Error('Insufficient balance');
+  }
 
-    db.prepare('UPDATE users SET balance = ?, nonce = nonce + 1 WHERE id = ?')
-      .run(finalBalance, ctx.userId);
+  // Round the final balance to avoid floating point drift
+  const finalBalance = Math.round(updateResult.balance * 100) / 100;
+  if (finalBalance !== updateResult.balance) {
+    await users.updateOne({ id: ctx.userId }, { $set: { balance: finalBalance } });
+  }
 
-    db.prepare(
-      'INSERT INTO bets (user_id, game, bet_amount, outcome, payout, multiplier, details, server_seed, client_seed, nonce) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(
-      ctx.userId, gameName, betAmount, outcome, payout, multiplier,
-      JSON.stringify(details), ctx.serverSeed, ctx.clientSeed, ctx.nonce
-    );
+  const betId = await getNextSequence(db, 'betId');
 
-    return finalBalance;
+  await bets.insertOne({
+    id: betId,
+    user_id: ctx.userId,
+    game: gameName,
+    bet_amount: betAmount,
+    outcome,
+    payout,
+    multiplier,
+    details: JSON.stringify(details),
+    server_seed: ctx.serverSeed,
+    client_seed: ctx.clientSeed,
+    nonce: ctx.nonce,
+    created_at: new Date(),
   });
 
-  const finalBalance = txn();
   return { newBalance: finalBalance };
 }
 
-/** Deduct bet from balance atomically (for session-based games like Mines) */
-export function deductBet(userId: number, betAmount: number): number {
-  const db = getDb();
-  const txn = db.transaction(() => {
-    const user = db.prepare('SELECT balance FROM users WHERE id = ?').get(userId) as any;
-    if (!user || user.balance < betAmount) throw new Error('Insufficient balance');
-    const newBalance = Math.round((user.balance - betAmount) * 100) / 100;
-    db.prepare('UPDATE users SET balance = ? WHERE id = ?').run(newBalance, userId);
-    return newBalance;
-  });
-  return txn();
+/**
+ * Deduct bet from balance atomically (for session-based games like Mines).
+ * FIX #2: Uses findOneAndUpdate with balance floor guard.
+ */
+export async function deductBet(userId: number, betAmount: number): Promise<number> {
+  const db = await getDb();
+  const users = db.collection('users');
+
+  const result = await users.findOneAndUpdate(
+    { id: userId, balance: { $gte: betAmount } },
+    { $inc: { balance: -Math.round(betAmount * 100) / 100 } },
+    { returnDocument: 'after' }
+  );
+
+  if (!result) {
+    throw new Error('Insufficient balance');
+  }
+
+  const newBalance = Math.round(result.balance * 100) / 100;
+  if (newBalance !== result.balance) {
+    await users.updateOne({ id: userId }, { $set: { balance: newBalance } });
+  }
+  return newBalance;
 }
 
-/** Credit payout to user */
-export function creditPayout(userId: number, payout: number): number {
-  const db = getDb();
-  const txn = db.transaction(() => {
-    const user = db.prepare('SELECT balance FROM users WHERE id = ?').get(userId) as any;
-    const newBalance = Math.round((user.balance + payout) * 100) / 100;
-    db.prepare('UPDATE users SET balance = ?, nonce = nonce + 1 WHERE id = ?').run(newBalance, userId);
-    return newBalance;
-  });
-  return txn();
+/** Credit payout to user — atomic increment, safe even if called concurrently */
+export async function creditPayout(userId: number, payout: number): Promise<number> {
+  const db = await getDb();
+  const users = db.collection('users');
+
+  const result = await users.findOneAndUpdate(
+    { id: userId },
+    { $inc: { balance: Math.round(payout * 100) / 100, nonce: 1 } },
+    { returnDocument: 'after' }
+  );
+
+  if (!result) throw new Error('User not found');
+  const newBalance = Math.round(result.balance * 100) / 100;
+  if (newBalance !== result.balance) {
+    await users.updateOne({ id: userId }, { $set: { balance: newBalance } });
+  }
+  return newBalance;
 }
 
 /** Increment nonce only */
-export function incrementNonce(userId: number): void {
-  const db = getDb();
-  db.prepare('UPDATE users SET nonce = nonce + 1 WHERE id = ?').run(userId);
+export async function incrementNonce(userId: number): Promise<void> {
+  const db = await getDb();
+  const users = db.collection('users');
+  await users.updateOne({ id: userId }, { $inc: { nonce: 1 } });
+}
+
+/**
+ * Refund a bet amount back to the user — used when session creation fails
+ * after bet has already been deducted. FIX #3.
+ */
+export async function refundBet(userId: number, amount: number): Promise<void> {
+  const db = await getDb();
+  const users = db.collection('users');
+  await users.updateOne(
+    { id: userId },
+    { $inc: { balance: Math.round(amount * 100) / 100 } }
+  );
 }

@@ -5,14 +5,26 @@ import { signToken } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
-    const { username, password } = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { username, password } = body;
     
     if (!username || !password) {
       return NextResponse.json({ error: 'Username and password required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as any;
+    if (username.toLowerCase() === 'admin') {
+      return NextResponse.json({ error: 'Admin login is disabled via password. Please use your secure admin access link.' }, { status: 403 });
+    }
+
+    const db = await getDb();
+    const users = db.collection('users');
+
+    const user = await users.findOne({ username }) as any;
     
     if (!user) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });

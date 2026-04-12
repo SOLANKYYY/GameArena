@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { generateMinePositions, generateFloats } from '@/lib/rng';
-import { checkGameActive, deductBet, incrementNonce } from '@/lib/gameHelper';
+import { checkGameActive, checkRoundActive, deductBet, incrementNonce, refundBet } from '@/lib/gameHelper';
 import getDb from '@/lib/db';
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
   try {
     const user = requireAuth(req);
-    const { betAmount, numMines } = await req.json();
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { betAmount, numMines } = body;
 
     if (!betAmount || betAmount <= 0 || !Number.isFinite(betAmount)) {
       return NextResponse.json({ error: 'Invalid bet amount' }, { status: 400 });
@@ -17,44 +24,70 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Number of mines must be between 1 and 24' }, { status: 400 });
     }
 
-    checkGameActive('mines');
+    await checkGameActive('mines');
+    await checkRoundActive(user.role);
 
-    const db = getDb();
-    const dbUser = db.prepare('SELECT balance, server_seed, client_seed, nonce FROM users WHERE id = ?').get(user.userId) as any;
+    const db = await getDb();
+    const users = db.collection('users');
+    const gameSessions = db.collection('game_sessions');
+
+    const dbUser = await users.findOne({ id: user.userId }) as any;
     if (!dbUser || dbUser.balance < betAmount) {
       return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 });
     }
 
     // Cancel any existing active sessions
-    db.prepare("UPDATE game_sessions SET completed_at = datetime('now'), state = json_set(state, '$.status', 'cancelled') WHERE user_id = ? AND game = 'mines' AND completed_at IS NULL")
-      .run(user.userId);
+    const activeSessions = await gameSessions.find({ user_id: user.userId, game: 'mines', completed_at: null }).toArray();
+    for (const s of activeSessions) {
+      try {
+        const st = JSON.parse(s.state as string);
+        st.status = 'cancelled';
+        await gameSessions.updateOne({ id: s.id }, { $set: { state: JSON.stringify(st), completed_at: new Date() } });
+      } catch {
+        // If state JSON is corrupt, just close the session
+        await gameSessions.updateOne({ id: s.id }, { $set: { completed_at: new Date() } });
+      }
+    }
 
-    // Deduct bet amount
-    const newBalance = deductBet(user.userId, betAmount);
+    // Deduct bet amount (atomic — will throw if insufficient balance)
+    const newBalance = await deductBet(user.userId, betAmount);
 
     // Generate mine positions using provably fair RNG
     const floats = generateFloats(dbUser.server_seed, dbUser.client_seed, dbUser.nonce, 24);
     const minePositions = generateMinePositions(floats, numMines);
     const sessionId = crypto.randomUUID();
 
-    // Store session in game_sessions table
+    // Store session in game_sessions collection
     const sessionState = {
       status: 'active',
       betAmount,
       numMines,
       minePositions,
-      revealedPositions: [],
+      revealedPositions: [] as number[],
       currentMultiplier: 1.0,
       serverSeed: dbUser.server_seed,
       clientSeed: dbUser.client_seed,
       nonce: dbUser.nonce,
     };
 
-    db.prepare(
-      'INSERT INTO game_sessions (id, user_id, game, state, bet_amount) VALUES (?, ?, ?, ?, ?)'
-    ).run(sessionId, user.userId, 'mines', JSON.stringify(sessionState), betAmount);
+    // FIX #3: If session insert fails, refund the deducted bet
+    try {
+      await gameSessions.insertOne({
+        id: sessionId,
+        user_id: user.userId,
+        game: 'mines',
+        state: JSON.stringify(sessionState),
+        bet_amount: betAmount,
+        created_at: new Date(),
+        completed_at: null,
+      });
+    } catch (insertErr) {
+      // Refund the bet since session couldn't be created
+      await refundBet(user.userId, betAmount);
+      throw new Error('Failed to create game session. Bet has been refunded.');
+    }
 
-    incrementNonce(user.userId);
+    await incrementNonce(user.userId);
 
     return NextResponse.json({
       sessionId,

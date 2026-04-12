@@ -2,17 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { KENO_PAYOUTS } from '@/lib/constants';
 import { generateKenoHits } from '@/lib/rng';
-import { getGameContext, checkGameActive, validateBet, recordBet } from '@/lib/gameHelper';
+import { getGameContext, checkGameActive, checkRoundActive, validateBet, recordBet } from '@/lib/gameHelper';
 
 export async function POST(req: NextRequest) {
   try {
     const user = requireAuth(req);
-    const { betAmount, picks } = await req.json();
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { betAmount, picks } = body;
 
     if (!Array.isArray(picks) || picks.length < 1 || picks.length > 10) {
       return NextResponse.json({ error: 'Must pick 1 to 10 numbers' }, { status: 400 });
     }
-    // Validate each pick is 1-40 and unique
     const pickSet = new Set(picks);
     if (pickSet.size !== picks.length) {
       return NextResponse.json({ error: 'Picks must be unique' }, { status: 400 });
@@ -23,9 +29,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    checkGameActive('keno');
-    const ctx = getGameContext(user.userId, 10); // 10 floats needed for 10 draws
-    validateBet(betAmount, ctx.balance, 'keno');
+    await checkGameActive('keno');
+    await checkRoundActive(user.role);
+    const ctx = await getGameContext(user.userId, 10);
+    await validateBet(betAmount, ctx.balance, 'keno');
 
     const drawnNumbers = generateKenoHits(ctx.floats);
     const drawnSet = new Set(drawnNumbers);
@@ -38,7 +45,7 @@ export async function POST(req: NextRequest) {
     const won = multiplier > 0;
     const payout = won ? Math.round(betAmount * multiplier * 100) / 100 : 0;
 
-    const { newBalance } = recordBet(ctx, 'keno', betAmount, won ? 'win' : 'loss', payout, multiplier, {
+    const { newBalance } = await recordBet(ctx, 'keno', betAmount, won ? 'win' : 'loss', payout, multiplier, {
       picks, drawnNumbers, matches, matchCount,
     });
 

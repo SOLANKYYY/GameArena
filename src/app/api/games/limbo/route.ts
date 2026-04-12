@@ -1,27 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { limboResult } from '@/lib/rng';
-import { getGameContext, checkGameActive, validateBet, recordBet } from '@/lib/gameHelper';
+import { getGameContext, checkGameActive, checkRoundActive, validateBet, recordBet } from '@/lib/gameHelper';
 
 export async function POST(req: NextRequest) {
   try {
     const user = requireAuth(req);
-    const { betAmount, targetMultiplier } = await req.json();
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { betAmount, targetMultiplier } = body;
 
     if (!targetMultiplier || targetMultiplier < 1.01 || targetMultiplier > 1000000) {
       return NextResponse.json({ error: 'Target multiplier must be between 1.01 and 1,000,000' }, { status: 400 });
     }
 
-    checkGameActive('limbo');
-    const ctx = getGameContext(user.userId, 1);
-    validateBet(betAmount, ctx.balance, 'limbo');
+    await checkGameActive('limbo');
+    await checkRoundActive(user.role);
+    const ctx = await getGameContext(user.userId, 1);
+    await validateBet(betAmount, ctx.balance, 'limbo');
 
     const resultMultiplier = limboResult(ctx.floats[0]);
     const won = resultMultiplier >= targetMultiplier;
     const payout = won ? Math.round(betAmount * targetMultiplier * 100) / 100 : 0;
     const winChance = parseFloat((99 / targetMultiplier).toFixed(4));
 
-    const { newBalance } = recordBet(ctx, 'limbo', betAmount, won ? 'win' : 'loss', payout, resultMultiplier, {
+    const { newBalance } = await recordBet(ctx, 'limbo', betAmount, won ? 'win' : 'loss', payout, resultMultiplier, {
       targetMultiplier,
       resultMultiplier,
       winChance,

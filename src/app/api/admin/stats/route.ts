@@ -6,49 +6,89 @@ import { requireAdmin } from '@/lib/auth';
 export async function GET(req: NextRequest) {
   try {
     requireAdmin(req);
-    const db = getDb();
+    const db = await getDb();
 
     const { searchParams } = new URL(req.url);
     const type = searchParams.get('type') || 'stats';
 
     if (type === 'sessions') {
       // Live active sessions for Mines/Moles
-      const sessions = db.prepare(`
-        SELECT gs.id, gs.game, gs.bet_amount as betAmount, gs.created_at as createdAt,
-               u.username, u.team_name as teamName
-        FROM game_sessions gs
-        JOIN users u ON gs.user_id = u.id
-        WHERE gs.completed_at IS NULL
-        ORDER BY gs.created_at DESC
-      `).all();
+      const gameSessions = db.collection('game_sessions');
+      const sessions = await gameSessions
+        .aggregate([
+          { $match: { completed_at: null } },
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'user_id',
+              foreignField: 'id',
+              as: 'user',
+            },
+          },
+          { $unwind: '$user' },
+          {
+            $project: {
+              _id: 0,
+              id: 1,
+              game: 1,
+              betAmount: '$bet_amount',
+              createdAt: '$created_at',
+              username: '$user.username',
+              teamName: '$user.team_name',
+            },
+          },
+          { $sort: { createdAt: -1 } },
+        ])
+        .toArray();
       return NextResponse.json({ sessions });
     }
 
     // Stats: today's totals
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const todayStr = todayStart.toISOString();
 
-    const stats = db.prepare(`
-      SELECT
-        COUNT(*) as totalBets,
-        COALESCE(SUM(bet_amount), 0) as totalWagered,
-        COALESCE(SUM(payout), 0) as totalPaidOut,
-        COALESCE(SUM(bet_amount) - SUM(payout), 0) as houseProfit
-      FROM bets
-      WHERE created_at >= ?
-    `).get(todayStr) as any;
+    const betsCol = db.collection('bets');
+
+    const statsResult = await betsCol
+      .aggregate([
+        { $match: { created_at: { $gte: todayStart } } },
+        {
+          $group: {
+            _id: null,
+            totalBets: { $sum: 1 },
+            totalWagered: { $sum: '$bet_amount' },
+            totalPaidOut: { $sum: '$payout' },
+          },
+        },
+      ])
+      .toArray();
+
+    const stats = statsResult[0] || { totalBets: 0, totalWagered: 0, totalPaidOut: 0 };
+    stats.houseProfit = (stats.totalWagered || 0) - (stats.totalPaidOut || 0);
 
     // Per-game breakdown
-    const perGame = db.prepare(`
-      SELECT game,
-        COUNT(*) as bets,
-        COALESCE(SUM(bet_amount), 0) as wagered,
-        COALESCE(SUM(payout), 0) as paidOut
-      FROM bets
-      WHERE created_at >= ?
-      GROUP BY game
-    `).all(todayStr);
+    const perGame = await betsCol
+      .aggregate([
+        { $match: { created_at: { $gte: todayStart } } },
+        {
+          $group: {
+            _id: '$game',
+            bets: { $sum: 1 },
+            wagered: { $sum: '$bet_amount' },
+            paidOut: { $sum: '$payout' },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            game: '$_id',
+            bets: 1,
+            wagered: 1,
+            paidOut: 1,
+          },
+        },
+      ])
+      .toArray();
 
     return NextResponse.json({ stats, perGame });
   } catch (error: any) {

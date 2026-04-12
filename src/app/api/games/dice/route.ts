@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { diceResult } from '@/lib/rng';
-import { getGameContext, checkGameActive, validateBet, recordBet } from '@/lib/gameHelper';
+import { getGameContext, checkGameActive, checkRoundActive, validateBet, recordBet } from '@/lib/gameHelper';
 
 export async function POST(req: NextRequest) {
   try {
     const user = requireAuth(req);
-    const { betAmount, target, condition } = await req.json();
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { betAmount, target, condition } = body;
 
     if (target === undefined || target < 0.01 || target > 99.99) {
       return NextResponse.json({ error: 'Target must be between 0.01 and 99.99' }, { status: 400 });
@@ -15,9 +22,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Condition must be "over" or "under"' }, { status: 400 });
     }
 
-    checkGameActive('dice');
-    const ctx = getGameContext(user.userId, 1);
-    validateBet(betAmount, ctx.balance, 'dice');
+    await checkGameActive('dice');
+    await checkRoundActive(user.role);
+    const ctx = await getGameContext(user.userId, 1);
+    await validateBet(betAmount, ctx.balance, 'dice');
 
     const roll = diceResult(ctx.floats[0]);
     const winChance = condition === 'over' ? 100 - target : target;
@@ -25,7 +33,7 @@ export async function POST(req: NextRequest) {
     const won = condition === 'over' ? roll > target : roll < target;
     const payout = won ? Math.round(betAmount * multiplier * 100) / 100 : 0;
 
-    const { newBalance } = recordBet(ctx, 'dice', betAmount, won ? 'win' : 'loss', payout, multiplier, {
+    const { newBalance } = await recordBet(ctx, 'dice', betAmount, won ? 'win' : 'loss', payout, multiplier, {
       target, condition, roll, winChance,
     });
 

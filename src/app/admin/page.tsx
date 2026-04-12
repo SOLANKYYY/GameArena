@@ -12,8 +12,17 @@ interface HistoryEntry { id: number; game: string; betAmount: number; outcome: s
 interface GameSetting { game_name: string; is_active: number; min_bet: number; max_bet: number; }
 interface LiveSession { id: string; game: string; betAmount: number; createdAt: string; username: string; teamName: string; }
 interface Stats { totalBets: number; totalWagered: number; totalPaidOut: number; houseProfit: number; }
+interface RoundInfo { round_number: number; is_active: boolean; timer_duration: number; started_at: string; ends_at: string; }
 
 const gameIcons: Record<string, string> = { limbo: '🚀', dice: '🎲', mines: '💎', moles: '🔨', wheel: '🎡', plinko: '📍', keno: '🎯' };
+
+function formatTime(seconds: number): string {
+  if (seconds <= 0) return '00:00:00';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
 
 export default function AdminPage() {
   const { user, token, loading } = useAuth();
@@ -26,7 +35,13 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [historyFilter, setHistoryFilter] = useState('');
   const [balanceAction, setBalanceAction] = useState<{ userId: number; action: string; amount: string } | null>(null);
-  const [leaderboardLastUpdated, setLeaderboardLastUpdated] = useState<Date | null>(null);
+
+  // Round management state
+  const [round, setRound] = useState<RoundInfo | null>(null);
+  const [roundNumber, setRoundNumber] = useState('1');
+  const [timerMinutes, setTimerMinutes] = useState('30');
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [isInitializing, setIsInitializing] = useState(false);
 
   // Team management state
   const [showAddTeam, setShowAddTeam] = useState(false);
@@ -57,36 +72,77 @@ export default function AdminPage() {
     try { const res = await fetch('/api/admin/stats?type=sessions', { headers: { Authorization: `Bearer ${token}` } }); const data = await res.json(); if (res.ok) setSessions(data.sessions); } catch {}
   }, [token]);
 
+  const fetchRound = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/round');
+      const data = await res.json();
+      if (res.ok && data.round) {
+        setRound(data.round);
+        if (data.round.round_number) setRoundNumber(String(data.round.round_number));
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
-    if (token && user?.role === 'admin') { fetchTeams(); fetchHistory(); fetchSettings(); fetchStats(); fetchSessions(); }
-  }, [token, user, fetchTeams, fetchHistory, fetchSettings, fetchStats, fetchSessions]);
+    if (token && user?.role === 'admin') { fetchTeams(); fetchHistory(); fetchSettings(); fetchStats(); fetchSessions(); fetchRound(); }
+  }, [token, user, fetchTeams, fetchHistory, fetchSettings, fetchStats, fetchSessions, fetchRound]);
 
   useEffect(() => { if (token) fetchHistory(); }, [historyFilter, token, fetchHistory]);
 
   // Auto-refresh stats every 10s
   useEffect(() => {
     if (!token || user?.role !== 'admin') return;
-    const interval = setInterval(() => { fetchStats(); fetchSessions(); }, 10000);
+    const interval = setInterval(() => { fetchStats(); fetchSessions(); fetchRound(); }, 10000);
     return () => clearInterval(interval);
-  }, [token, user, fetchStats, fetchSessions]);
+  }, [token, user, fetchStats, fetchSessions, fetchRound]);
 
-  // Auto-refresh teams (for live leaderboard) every 5s when on leaderboard tab
+  // Countdown timer
   useEffect(() => {
-    if (!token || user?.role !== 'admin' || activeTab !== 'leaderboard') return;
-    const interval = setInterval(() => {
-      fetchTeams();
-      setLeaderboardLastUpdated(new Date());
-    }, 5000);
+    if (!round?.is_active || !round.ends_at) return;
+    const tick = () => {
+      const remaining = Math.max(0, (new Date(round.ends_at).getTime() - Date.now()) / 1000);
+      setTimeLeft(remaining);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [token, user, activeTab, fetchTeams]);
+  }, [round]);
 
-  // Immediately refresh teams when switching to leaderboard tab
-  useEffect(() => {
-    if (activeTab === 'leaderboard' && token) {
-      fetchTeams();
-      setLeaderboardLastUpdated(new Date());
-    }
-  }, [activeTab, token, fetchTeams]);
+  const handleInitializeRound = async () => {
+    if (isInitializing) return;
+    const mins = parseFloat(timerMinutes);
+    const rn = parseInt(roundNumber);
+    if (!rn || rn < 1) return toast.error('Invalid round number');
+    if (!mins || mins < 0.5) return toast.error('Timer must be at least 0.5 minutes');
+    setIsInitializing(true);
+    try {
+      const res = await fetch('/api/admin/round', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'initialize', roundNumber: rn, timerDuration: Math.floor(mins * 60) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success(data.message);
+      fetchRound();
+    } catch (err: any) { toast.error(err.message); }
+    setIsInitializing(false);
+  };
+
+  const handleStopRound = async () => {
+    if (!confirm('Stop the current round?')) return;
+    try {
+      const res = await fetch('/api/admin/round', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'stop' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success('Round stopped');
+      fetchRound();
+    } catch (err: any) { toast.error(err.message); }
+  };
 
   const handleBalanceUpdate = async () => {
     if (!balanceAction) return;
@@ -125,7 +181,6 @@ export default function AdminPage() {
       }).catch(() => {});
   };
 
-  // ── Add Team ──
   const handleCreateTeam = async () => {
     if (isCreating) return;
     if (!newTeam.username || !newTeam.password || !newTeam.teamName) {
@@ -148,7 +203,6 @@ export default function AdminPage() {
     setIsCreating(false);
   };
 
-  // ── Delete Team ──
   const handleDeleteTeam = async () => {
     if (!deleteConfirm || isDeleting) return;
     setIsDeleting(true);
@@ -168,119 +222,239 @@ export default function AdminPage() {
   };
 
   if (loading || !user || user.role !== 'admin') {
-    return <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div className="spinner spinner-light" style={{ width: 32, height: 32 }} /></div>;
+    return <div className="admin-loading"><div className="spinner spinner-light" style={{ width: 32, height: 32 }} /></div>;
   }
 
   const tabs = [
-    { id: 'overview', label: '📊 Overview' },
-    { id: 'teams', label: '👥 Teams' },
-    { id: 'history', label: '📜 History' },
-    { id: 'sessions', label: '🟢 Live Sessions' },
-    { id: 'leaderboard', label: '🏆 Leaderboard' },
-    { id: 'settings', label: '⚙️ Settings' },
+    { id: 'overview', label: 'Overview', icon: '📊' },
+    { id: 'rounds', label: 'Rounds', icon: '⏱️' },
+    { id: 'teams', label: 'Teams', icon: '👥' },
+    { id: 'history', label: 'History', icon: '📜' },
+    { id: 'leaderboard', label: 'Leaderboard', icon: '🏆' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
+    <div className="admin-root">
       <Navbar />
-      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '8px' }}>⚙️ Admin Dashboard</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '32px' }}>Manage teams, monitor activity, and control game settings</p>
+
+      {/* Background effects */}
+      <div className="admin-bg-glow admin-bg-glow-1" />
+      <div className="admin-bg-glow admin-bg-glow-2" />
+
+      <main className="admin-main">
+        {/* Header */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="admin-header">
+          <div>
+            <h1 className="admin-title">⚙️ Admin Dashboard</h1>
+            <p className="admin-subtitle">Manage teams, monitor activity, and control game settings</p>
+          </div>
+          {round?.is_active && (
+            <div className="admin-round-display">
+              <span className="admin-round-dot" />
+              <span className="admin-round-label">Round {round.round_number}</span>
+              <span className="admin-round-timer font-mono">{formatTime(timeLeft)}</span>
+            </div>
+          )}
         </motion.div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: '1px solid var(--border)', paddingBottom: '12px', overflowX: 'auto' }}>
+        <div className="admin-tabs">
           {tabs.map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-              padding: '8px 16px', borderRadius: '8px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-              background: activeTab === tab.id ? 'var(--accent-green-dim)' : 'transparent',
-              color: activeTab === tab.id ? 'var(--accent-green)' : 'var(--text-secondary)',
-            }}>{tab.label}</button>
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`admin-tab ${activeTab === tab.id ? 'admin-tab-active' : ''}`}
+            >
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
           ))}
         </div>
 
-        {/* Overview Tab */}
+        {/* ═══ OVERVIEW TAB ═══ */}
         {activeTab === 'overview' && stats && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }} className="game-grid-2col">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="admin-section">
+            {/* Stats Cards */}
+            <div className="admin-stats-grid">
               {[
-                { label: 'Bets Today', value: stats.totalBets, icon: '🎲' },
-                { label: 'Wagered Today', value: stats.totalWagered.toFixed(2), icon: '💰', color: 'var(--accent-yellow)' },
-                { label: 'Paid Out Today', value: stats.totalPaidOut.toFixed(2), icon: '💸', color: 'var(--accent-green)' },
-                { label: 'House Profit', value: stats.houseProfit.toFixed(2), icon: '🏦', color: stats.houseProfit >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' },
+                { label: 'Total Bets', value: stats.totalBets, icon: '🎲', color: '#8b5cf6' },
+                { label: 'Total Wagered', value: stats.totalWagered.toFixed(2), icon: '💰', color: '#f59e0b' },
+                { label: 'Total Paid Out', value: stats.totalPaidOut.toFixed(2), icon: '💸', color: '#10b981' },
+                { label: 'House Profit', value: stats.houseProfit.toFixed(2), icon: '🏦', color: stats.houseProfit >= 0 ? '#10b981' : '#ef4444' },
               ].map(stat => (
-                <div key={stat.label} style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>{stat.label}</span>
-                    <span style={{ fontSize: '20px' }}>{stat.icon}</span>
+                <div key={stat.label} className="admin-stat-card" style={{ '--stat-color': stat.color } as React.CSSProperties}>
+                  <div className="admin-stat-header">
+                    <span className="admin-stat-label">{stat.label}</span>
+                    <span className="admin-stat-icon">{stat.icon}</span>
                   </div>
-                  <p className="font-mono" style={{ fontSize: '24px', fontWeight: 800, color: stat.color || 'var(--text-primary)' }}>{stat.value}</p>
+                  <p className="admin-stat-value font-mono" style={{ color: stat.color }}>{stat.value}</p>
                 </div>
               ))}
             </div>
-            <button onClick={handleExportCSV} className="btn-secondary" style={{ marginBottom: '16px' }}>
-              📥 Export Bet History CSV
-            </button>
+
+            {/* Quick Actions */}
+            <div className="admin-actions-grid">
+              <button onClick={handleExportCSV} className="admin-action-btn admin-action-cyan">
+                <span>📥</span> Export CSV
+              </button>
+              <button onClick={() => setActiveTab('rounds')} className="admin-action-btn admin-action-purple">
+                <span>⏱️</span> Manage Rounds
+              </button>
+              <button onClick={() => setActiveTab('teams')} className="admin-action-btn admin-action-yellow">
+                <span>👥</span> Manage Teams
+              </button>
+              <button onClick={handleResetAll} className="admin-action-btn admin-action-red">
+                <span>🔄</span> Reset All Balances
+              </button>
+            </div>
           </motion.div>
         )}
 
-        {/* Teams Tab */}
+        {/* ═══ ROUNDS TAB ═══ */}
+        {activeTab === 'rounds' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="admin-section">
+            {/* Current Round Status */}
+            <div className="admin-round-card">
+              <div className="admin-round-card-header">
+                <h3>📡 Round Status</h3>
+                <span className={`admin-round-status ${round?.is_active ? 'admin-round-status-active' : 'admin-round-status-inactive'}`}>
+                  {round?.is_active ? '● ACTIVE' : '○ INACTIVE'}
+                </span>
+              </div>
+              {round?.is_active ? (
+                <div className="admin-round-active-info">
+                  <div className="admin-round-timer-display">
+                    <span className="admin-round-timer-label">Time Remaining</span>
+                    <span className="admin-round-timer-value font-mono">{formatTime(timeLeft)}</span>
+                  </div>
+                  <div className="admin-round-details">
+                    <div className="admin-round-detail">
+                      <span>Round Number</span>
+                      <strong>{round.round_number}</strong>
+                    </div>
+                    <div className="admin-round-detail">
+                      <span>Duration</span>
+                      <strong>{Math.floor(round.timer_duration / 60)} min</strong>
+                    </div>
+                    <div className="admin-round-detail">
+                      <span>Started</span>
+                      <strong>{new Date(round.started_at).toLocaleTimeString()}</strong>
+                    </div>
+                    <div className="admin-round-detail">
+                      <span>Ends At</span>
+                      <strong>{new Date(round.ends_at).toLocaleTimeString()}</strong>
+                    </div>
+                  </div>
+                  <button onClick={handleStopRound} className="admin-action-btn admin-action-red" style={{ width: '100%', marginTop: '16px' }}>
+                    ⏹️ Stop Round
+                  </button>
+                </div>
+              ) : (
+                <p className="admin-round-inactive-msg">No round is currently active. Initialize a new round below.</p>
+              )}
+            </div>
+
+            {/* Initialize New Round */}
+            <div className="admin-round-card">
+              <h3 className="admin-round-init-title">🚀 Initialize New Round</h3>
+              <p className="admin-round-init-desc">Set the round number and timer duration, then initialize to start the countdown.</p>
+              <div className="admin-round-form">
+                <div className="admin-round-field">
+                  <label>Round Number</label>
+                  <input
+                    type="number"
+                    value={roundNumber}
+                    onChange={e => setRoundNumber(e.target.value)}
+                    min="1"
+                    className="input-dark"
+                    placeholder="e.g. 1"
+                  />
+                </div>
+                <div className="admin-round-field">
+                  <label>Timer Duration (minutes)</label>
+                  <input
+                    type="number"
+                    value={timerMinutes}
+                    onChange={e => setTimerMinutes(e.target.value)}
+                    min="0.5"
+                    step="0.5"
+                    className="input-dark"
+                    placeholder="e.g. 30"
+                  />
+                </div>
+                <div className="admin-round-quick-times">
+                  {[5, 10, 15, 30, 45, 60].map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setTimerMinutes(String(m))}
+                      className={`admin-quick-time-btn ${timerMinutes === String(m) ? 'admin-quick-time-active' : ''}`}
+                    >
+                      {m}m
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={handleInitializeRound}
+                disabled={isInitializing}
+                className="admin-init-round-btn"
+              >
+                {isInitializing ? (
+                  <><span className="spinner" /> Initializing...</>
+                ) : (
+                  <>🎮 Initialize Round {roundNumber} ({timerMinutes} min timer)</>
+                )}
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ═══ TEAMS TAB ═══ */}
         {activeTab === 'teams' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="admin-section">
+            <div className="admin-teams-toolbar">
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => setShowAddTeam(true)} className="btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button onClick={() => setShowAddTeam(true)} className="admin-action-btn admin-action-purple" style={{ padding: '10px 20px' }}>
                   ➕ Add Team
                 </button>
               </div>
-              <button onClick={handleResetAll} className="btn-danger btn-sm">🔄 Reset All Balances</button>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span className="admin-teams-count">{teams.filter(t => t.role === 'player').length} teams</span>
+                <button onClick={handleResetAll} className="admin-action-btn admin-action-red" style={{ padding: '10px 20px' }}>
+                  🔄 Reset All
+                </button>
+              </div>
             </div>
 
-            {/* Teams Count */}
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-              {teams.filter(t => t.role === 'player').length} teams registered
-            </p>
-
-            <div style={{ background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px solid var(--border)', overflow: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="admin-table-container">
+              <table className="admin-table">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <tr>
                     {['Team', 'Username', 'Balance', 'Bets', 'Won', 'Lost', 'Actions'].map(h => (
-                      <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                      <th key={h}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {teams.map(team => (
-                    <tr key={team.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '10px 14px', fontWeight: 600, fontSize: '13px' }}>
-                        {team.teamName}
+                    <tr key={team.id}>
+                      <td>
+                        <span style={{ fontWeight: 600 }}>{team.teamName}</span>
                         {team.role === 'admin' && (
-                          <span style={{ marginLeft: '6px', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', fontWeight: 700 }}>ADMIN</span>
+                          <span className="admin-badge-admin">ADMIN</span>
                         )}
                       </td>
-                      <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{team.username}</td>
-                      <td style={{ padding: '10px 14px' }}><span className="font-mono" style={{ fontWeight: 700, color: 'var(--accent-green)', fontSize: '13px' }}>{team.balance.toFixed(2)}</span></td>
-                      <td style={{ padding: '10px 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>{team.totalBets}</td>
-                      <td style={{ padding: '10px 14px' }}><span className="font-mono" style={{ fontSize: '12px', color: 'var(--accent-green)' }}>{team.totalWon.toFixed(2)}</span></td>
-                      <td style={{ padding: '10px 14px' }}><span className="font-mono" style={{ fontSize: '12px', color: 'var(--accent-red)' }}>{team.totalLost.toFixed(2)}</span></td>
-                      <td style={{ padding: '10px 14px' }}>
+                      <td className="admin-table-secondary">{team.username}</td>
+                      <td><span className="font-mono" style={{ fontWeight: 700, color: '#10b981' }}>{team.balance.toFixed(2)}</span></td>
+                      <td className="admin-table-secondary">{team.totalBets}</td>
+                      <td><span className="font-mono" style={{ color: '#10b981', fontSize: '12px' }}>{team.totalWon.toFixed(2)}</span></td>
+                      <td><span className="font-mono" style={{ color: '#ef4444', fontSize: '12px' }}>{team.totalLost.toFixed(2)}</span></td>
+                      <td>
                         {team.role !== 'admin' && (
                           <div style={{ display: 'flex', gap: '6px' }}>
-                            <button onClick={() => setBalanceAction({ userId: team.id, action: 'set', amount: team.balance.toString() })} className="btn-secondary btn-sm" style={{ padding: '4px 10px', fontSize: '11px' }}>Edit</button>
-                            <button
-                              onClick={() => setDeleteConfirm({ userId: team.id, teamName: team.teamName })}
-                              style={{
-                                padding: '4px 10px', fontSize: '11px', borderRadius: '6px', border: '1px solid var(--accent-red)',
-                                background: 'var(--accent-red-dim)', color: 'var(--accent-red)', cursor: 'pointer', fontWeight: 600,
-                                transition: 'all 0.15s ease',
-                              }}
-                              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-red)'; e.currentTarget.style.color = '#fff'; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent-red-dim)'; e.currentTarget.style.color = 'var(--accent-red)'; }}
-                            >
-                              Delete
-                            </button>
+                            <button onClick={() => setBalanceAction({ userId: team.id, action: 'set', amount: team.balance.toString() })} className="admin-table-btn admin-table-btn-edit">Edit</button>
+                            <button onClick={() => setDeleteConfirm({ userId: team.id, teamName: team.teamName })} className="admin-table-btn admin-table-btn-delete">Delete</button>
                           </div>
                         )}
                       </td>
@@ -288,36 +462,30 @@ export default function AdminPage() {
                   ))}
                 </tbody>
               </table>
-              {teams.length === 0 && <p style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>No teams yet</p>}
+              {teams.length === 0 && <p className="admin-table-empty">No teams yet</p>}
             </div>
 
             {/* Balance Edit Modal */}
             <AnimatePresence>
               {balanceAction && (
-                <motion.div
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="modal-overlay" onClick={() => setBalanceAction(null)}
-                >
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="modal-card" onClick={e => e.stopPropagation()}
-                  >
-                    <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>💰 Edit Balance</h3>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => setBalanceAction(null)}>
+                  <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="admin-modal" onClick={e => e.stopPropagation()}>
+                    <h3 className="admin-modal-title">💰 Edit Balance</h3>
                     <div style={{ marginBottom: '16px' }}>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>Action</label>
+                      <label className="admin-modal-label">Action</label>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         {['set', 'add', 'deduct'].map(a => (
-                          <button key={a} className={balanceAction.action === a ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setBalanceAction({ ...balanceAction, action: a })} style={{ flex: 1, textTransform: 'capitalize' }}>{a}</button>
+                          <button key={a} className={`admin-modal-action-btn ${balanceAction.action === a ? 'admin-modal-action-active' : ''}`} onClick={() => setBalanceAction({ ...balanceAction, action: a })} style={{ flex: 1, textTransform: 'capitalize' }}>{a}</button>
                         ))}
                       </div>
                     </div>
                     <div style={{ marginBottom: '20px' }}>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>Amount</label>
+                      <label className="admin-modal-label">Amount</label>
                       <input type="number" value={balanceAction.amount} onChange={e => setBalanceAction({ ...balanceAction, amount: e.target.value })} className="input-dark" />
                     </div>
                     <div style={{ display: 'flex', gap: '10px' }}>
-                      <button onClick={() => setBalanceAction(null)} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
-                      <button onClick={handleBalanceUpdate} className="btn-primary" style={{ flex: 1 }}>Update</button>
+                      <button onClick={() => setBalanceAction(null)} className="admin-modal-cancel">Cancel</button>
+                      <button onClick={handleBalanceUpdate} className="admin-modal-confirm">Update</button>
                     </div>
                   </motion.div>
                 </motion.div>
@@ -327,55 +495,26 @@ export default function AdminPage() {
             {/* Add Team Modal */}
             <AnimatePresence>
               {showAddTeam && (
-                <motion.div
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="modal-overlay" onClick={() => setShowAddTeam(false)}
-                >
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="modal-card" onClick={e => e.stopPropagation()}
-                  >
-                    <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '4px' }}>➕ Add New Team</h3>
-                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '24px' }}>
-                      Create credentials for a new team. They will start with the default balance.
-                    </p>
-
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => setShowAddTeam(false)}>
+                  <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="admin-modal" onClick={e => e.stopPropagation()}>
+                    <h3 className="admin-modal-title">➕ Add New Team</h3>
+                    <p className="admin-modal-desc">Create credentials for a new team. They will start with the default balance.</p>
                     <div style={{ marginBottom: '16px' }}>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Team Name</label>
-                      <input
-                        type="text" value={newTeam.teamName}
-                        onChange={e => setNewTeam({ ...newTeam, teamName: e.target.value })}
-                        placeholder="e.g. Team Alpha"
-                        className="input-dark"
-                      />
+                      <label className="admin-modal-label">Team Name</label>
+                      <input type="text" value={newTeam.teamName} onChange={e => setNewTeam({ ...newTeam, teamName: e.target.value })} placeholder="e.g. Team Alpha" className="input-dark" />
                     </div>
-
                     <div style={{ marginBottom: '16px' }}>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Username</label>
-                      <input
-                        type="text" value={newTeam.username}
-                        onChange={e => setNewTeam({ ...newTeam, username: e.target.value })}
-                        placeholder="e.g. team_alpha"
-                        className="input-dark"
-                      />
+                      <label className="admin-modal-label">Username</label>
+                      <input type="text" value={newTeam.username} onChange={e => setNewTeam({ ...newTeam, username: e.target.value })} placeholder="e.g. team_alpha" className="input-dark" />
                     </div>
-
                     <div style={{ marginBottom: '24px' }}>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Password</label>
-                      <input
-                        type="text" value={newTeam.password}
-                        onChange={e => setNewTeam({ ...newTeam, password: e.target.value })}
-                        placeholder="e.g. pass1234"
-                        className="input-dark"
-                      />
-                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        Password is visible so you can share it with the team
-                      </p>
+                      <label className="admin-modal-label">Password</label>
+                      <input type="text" value={newTeam.password} onChange={e => setNewTeam({ ...newTeam, password: e.target.value })} placeholder="e.g. pass1234" className="input-dark" />
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Password is visible so you can share it with the team</p>
                     </div>
-
                     <div style={{ display: 'flex', gap: '10px' }}>
-                      <button onClick={() => { setShowAddTeam(false); setNewTeam({ username: '', password: '', teamName: '' }); }} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
-                      <button onClick={handleCreateTeam} disabled={isCreating} className="btn-primary" style={{ flex: 1 }}>
+                      <button onClick={() => { setShowAddTeam(false); setNewTeam({ username: '', password: '', teamName: '' }); }} className="admin-modal-cancel">Cancel</button>
+                      <button onClick={handleCreateTeam} disabled={isCreating} className="admin-modal-confirm">
                         {isCreating ? <><span className="spinner" /> Creating...</> : '✅ Create Team'}
                       </button>
                     </div>
@@ -387,27 +526,19 @@ export default function AdminPage() {
             {/* Delete Confirm Modal */}
             <AnimatePresence>
               {deleteConfirm && (
-                <motion.div
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="modal-overlay" onClick={() => setDeleteConfirm(null)}
-                >
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="modal-card" onClick={e => e.stopPropagation()}
-                  >
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
+                  <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="admin-modal" onClick={e => e.stopPropagation()}>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚠️</div>
-                      <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Delete Team</h3>
-                      <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                        Are you sure you want to delete <strong style={{ color: 'var(--accent-red)' }}>{deleteConfirm.teamName}</strong>?
-                      </p>
-                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '24px' }}>
-                        This will permanently remove the team, their bet history, and all game sessions. This cannot be undone.
+                      <h3 className="admin-modal-title">Delete Team</h3>
+                      <p className="admin-modal-desc">
+                        Are you sure you want to delete <strong style={{ color: '#ef4444' }}>{deleteConfirm.teamName}</strong>?
+                        <br /><span style={{ fontSize: '12px' }}>This will permanently remove the team, their bet history, and all game sessions.</span>
                       </p>
                     </div>
                     <div style={{ display: 'flex', gap: '10px' }}>
-                      <button onClick={() => setDeleteConfirm(null)} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
-                      <button onClick={handleDeleteTeam} disabled={isDeleting} className="btn-danger" style={{ flex: 1 }}>
+                      <button onClick={() => setDeleteConfirm(null)} className="admin-modal-cancel">Cancel</button>
+                      <button onClick={handleDeleteTeam} disabled={isDeleting} className="admin-modal-delete">
                         {isDeleting ? <><span className="spinner spinner-light" style={{ width: 16, height: 16 }} /> Deleting...</> : '🗑️ Delete Forever'}
                       </button>
                     </div>
@@ -418,65 +549,65 @@ export default function AdminPage() {
           </motion.div>
         )}
 
-        {/* History Tab */}
+        {/* ═══ HISTORY TAB ═══ */}
         {activeTab === 'history' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="admin-section">
+            <div className="admin-history-filters">
               {['', 'limbo', 'dice', 'mines', 'moles', 'wheel', 'plinko', 'keno'].map(g => (
-                <button key={g} onClick={() => setHistoryFilter(g)} className={historyFilter === g ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} style={{ textTransform: 'capitalize', fontSize: '12px', padding: '6px 14px' }}>
+                <button key={g} onClick={() => setHistoryFilter(g)} className={`admin-filter-btn ${historyFilter === g ? 'admin-filter-active' : ''}`}>
                   {g ? `${gameIcons[g] || ''} ${g}` : 'All'}
                 </button>
               ))}
             </div>
-            <div style={{ background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px solid var(--border)', overflow: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="admin-table-container">
+              <table className="admin-table">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <tr>
                     {['Team', 'Game', 'Bet', 'Result', 'Payout', '×', 'Time'].map(h => (
-                      <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{h}</th>
+                      <th key={h}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {history.map(entry => (
-                    <tr key={entry.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px 14px', fontSize: '12px', fontWeight: 600 }}>{entry.teamName}</td>
-                      <td style={{ padding: '8px 14px', fontSize: '12px' }}>{gameIcons[entry.game]} {entry.game}</td>
-                      <td style={{ padding: '8px 14px' }}><span className="font-mono" style={{ fontSize: '12px' }}>{entry.betAmount.toFixed(2)}</span></td>
-                      <td style={{ padding: '8px 14px' }}>
-                        <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, background: entry.outcome === 'win' ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)', color: entry.outcome === 'win' ? 'var(--accent-green)' : 'var(--accent-red)' }}>{entry.outcome}</span>
+                    <tr key={entry.id}>
+                      <td style={{ fontWeight: 600, fontSize: '12px' }}>{entry.teamName}</td>
+                      <td style={{ fontSize: '12px' }}>{gameIcons[entry.game]} {entry.game}</td>
+                      <td><span className="font-mono" style={{ fontSize: '12px' }}>{entry.betAmount.toFixed(2)}</span></td>
+                      <td>
+                        <span className={`admin-result-badge ${entry.outcome === 'win' ? 'admin-result-win' : 'admin-result-loss'}`}>{entry.outcome}</span>
                       </td>
-                      <td style={{ padding: '8px 14px' }}><span className="font-mono" style={{ fontSize: '12px', color: entry.outcome === 'win' ? 'var(--accent-green)' : 'var(--text-muted)' }}>{entry.payout.toFixed(2)}</span></td>
-                      <td style={{ padding: '8px 14px' }}><span className="font-mono" style={{ fontSize: '12px' }}>{entry.multiplier.toFixed(2)}×</span></td>
-                      <td style={{ padding: '8px 14px', fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(entry.createdAt).toLocaleTimeString()}</td>
+                      <td><span className="font-mono" style={{ fontSize: '12px', color: entry.outcome === 'win' ? '#10b981' : 'var(--text-muted)' }}>{entry.payout.toFixed(2)}</span></td>
+                      <td><span className="font-mono" style={{ fontSize: '12px' }}>{entry.multiplier.toFixed(2)}×</span></td>
+                      <td style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(entry.createdAt).toLocaleTimeString()}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {history.length === 0 && <p style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>No bets yet</p>}
+              {history.length === 0 && <p className="admin-table-empty">No bets yet</p>}
             </div>
           </motion.div>
         )}
 
-        {/* Live Sessions Tab */}
+        {/* ═══ LIVE SESSIONS TAB ═══ */}
         {activeTab === 'sessions' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '16px' }}>Active Mines and Moles sessions (auto-refreshes every 10s)</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="admin-section">
+            <p className="admin-section-desc">Active Mines and Moles sessions (auto-refreshes every 10s)</p>
+            <div className="admin-sessions-list">
               {sessions.length === 0 ? (
-                <p style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px solid var(--border)' }}>No active sessions</p>
+                <p className="admin-empty-state">No active sessions</p>
               ) : sessions.map(s => (
-                <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '20px' }}>{gameIcons[s.game]}</span>
+                <div key={s.id} className="admin-session-card">
+                  <div className="admin-session-left">
+                    <span className="admin-session-icon">{gameIcons[s.game]}</span>
                     <div>
-                      <p style={{ fontWeight: 600, fontSize: '14px' }}>{s.teamName} <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '12px' }}>@{s.username}</span></p>
-                      <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{s.game} • Started {new Date(s.createdAt).toLocaleTimeString()}</p>
+                      <p className="admin-session-team">{s.teamName} <span className="admin-session-username">@{s.username}</span></p>
+                      <p className="admin-session-meta">{s.game} • Started {new Date(s.createdAt).toLocaleTimeString()}</p>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span className="font-mono" style={{ fontSize: '14px', fontWeight: 700, color: 'var(--accent-yellow)' }}>{s.betAmount.toFixed(2)}</span>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-green)', animation: 'pulse-green 2s infinite' }} />
+                  <div className="admin-session-right">
+                    <span className="font-mono admin-session-amount">{s.betAmount.toFixed(2)}</span>
+                    <span className="admin-session-live-dot" />
                   </div>
                 </div>
               ))}
@@ -484,58 +615,163 @@ export default function AdminPage() {
           </motion.div>
         )}
 
-        {/* Leaderboard Tab */}
-        {activeTab === 'leaderboard' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--accent-green)', fontWeight: 600 }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-green)', display: 'inline-block', animation: 'pulse-green 2s infinite' }} />
-                LIVE
-              </span>
-              {leaderboardLastUpdated && (
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Updated {leaderboardLastUpdated.toLocaleTimeString()}
-                </span>
-              )}
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' }}>Auto-refreshes every 5s</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {teams.filter(t => t.role === 'player').sort((a, b) => b.balance - a.balance).map((team, i) => (
-                <div key={team.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderRadius: '12px', background: 'var(--bg-secondary)', border: `1px solid ${i === 0 ? '#fbbf2440' : i === 1 ? '#94a3b830' : i === 2 ? '#cd7f3230' : 'var(--border)'}` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <span style={{ width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800, background: i === 0 ? '#fbbf2422' : i === 1 ? '#94a3b822' : i === 2 ? '#cd7f3222' : 'var(--bg-primary)', color: i === 0 ? '#fbbf24' : i === 1 ? '#94a3b8' : i === 2 ? '#cd7f32' : 'var(--text-muted)' }}>{i + 1}</span>
-                    <div>
-                      <p style={{ fontWeight: 700, fontSize: '14px' }}>{team.teamName}</p>
-                      <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>@{team.username} · {team.totalBets} bets</p>
-                    </div>
-                  </div>
-                  <p className="font-mono" style={{ fontSize: '18px', fontWeight: 800, color: 'var(--accent-green)' }}>{team.balance.toFixed(2)}</p>
-                </div>
-              ))}
-              {teams.filter(t => t.role === 'player').length === 0 && (
-                <p style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px solid var(--border)' }}>No teams yet</p>
-              )}
-            </div>
-          </motion.div>
-        )}
+        {/* ═══ LEADERBOARD TAB ═══ */}
+        {activeTab === 'leaderboard' && (() => {
+          const players = teams.filter(t => t.role === 'player').sort((a, b) => b.balance - a.balance);
+          const topScore = players.length > 0 ? players[0].balance : 0;
+          const totalBetsAll = players.reduce((sum, t) => sum + t.totalBets, 0);
+          const topThree = players.slice(0, 3);
+          // Podium order: 2nd, 1st, 3rd
+          const podiumOrder = [1, 0, 2];
+          const podiumIcons = ['👑', '🛡️', '🎖️'];
+          const podiumColors = [
+            { bg: 'rgba(251,191,36,0.10)', border: 'rgba(251,191,36,0.30)', text: '#fbbf24', glow: '0 0 40px rgba(251,191,36,0.10)' },
+            { bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.22)', text: '#94a3b8', glow: 'none' },
+            { bg: 'rgba(205,127,50,0.08)', border: 'rgba(205,127,50,0.22)', text: '#cd7f32', glow: 'none' },
+          ];
 
-        {/* Settings Tab */}
+          return (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="admin-section adm-lb-section">
+
+              {/* ── Header ── */}
+              <div className="adm-lb-top-bar">
+                <div className="adm-lb-title-group">
+                  <button className="adm-lb-back" onClick={() => setActiveTab('overview')}>←</button>
+                  <div className="adm-lb-icon-circle">🏆</div>
+                  <div>
+                    <h2 className="adm-lb-title">Leaderboard</h2>
+                    <p className="adm-lb-subtitle">Live Rankings</p>
+                  </div>
+                </div>
+                <div className="adm-lb-live-badge">
+                  <span className="adm-lb-live-dot" />
+                  <span>Updates every 10s</span>
+                </div>
+              </div>
+
+              {/* ── Summary Stats ── */}
+              <div className="adm-lb-stats-row">
+                {[
+                  { icon: '👥', label: 'Teams', value: players.length },
+                  { icon: '🏆', label: 'Top Score', value: topScore.toFixed(0) },
+                  { icon: '🎲', label: 'Total Bets', value: totalBetsAll },
+                ].map(stat => (
+                  <div key={stat.label} className="adm-lb-stat-card">
+                    <div className="adm-lb-stat-icon">{stat.icon}</div>
+                    <span className="adm-lb-stat-label">{stat.label}</span>
+                    <span className="adm-lb-stat-value font-mono">{stat.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Podium Top 3 ── */}
+              {topThree.length > 0 && (
+                <div className="adm-lb-podium-wrap">
+                  <div className="adm-lb-podium">
+                    {podiumOrder.map((idx) => {
+                      const entry = topThree[idx];
+                      if (!entry) return <div key={`empty-${idx}`} className="adm-lb-podium-empty" />;
+                      const rank = idx;
+                      const isFirst = rank === 0;
+                      const rc = podiumColors[rank];
+                      return (
+                        <motion.div
+                          key={`podium-${entry.id}`}
+                          className={`adm-lb-podium-card ${isFirst ? 'adm-lb-podium-first' : ''}`}
+                          style={{
+                            '--p-bg': rc.bg,
+                            '--p-border': rc.border,
+                            '--p-text': rc.text,
+                            '--p-glow': rc.glow,
+                          } as React.CSSProperties}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.1 + rank * 0.08 }}
+                        >
+                          <div className="adm-lb-podium-icon-wrap" style={{ background: rc.bg, borderColor: rc.border }}>
+                            {podiumIcons[rank]}
+                          </div>
+                          <h4 className="adm-lb-podium-name">{entry.teamName}</h4>
+                          <p className="adm-lb-podium-score font-mono" style={{ color: rc.text }}>{entry.balance.toFixed(0)}</p>
+                          <p className="adm-lb-podium-meta">{entry.totalBets > 0 ? `${entry.totalBets} bets` : '0 bets'}</p>
+                          <div className="adm-lb-podium-rank-badge" style={{ background: rc.bg, color: rc.text, borderColor: rc.border }}>
+                            #{rank + 1}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── All Teams Table ── */}
+              <div className="adm-lb-table-section">
+                <div className="adm-lb-table-header">
+                  <div className="adm-lb-table-title-group">
+                    <span className="adm-lb-table-icon">🛡️</span>
+                    <h3 className="adm-lb-table-title">All Teams</h3>
+                  </div>
+                  <span className="adm-lb-table-count">{players.length} registered</span>
+                </div>
+                <div className="adm-lb-table-wrap">
+                  <table className="adm-lb-table">
+                    <thead>
+                      <tr>
+                        <th>Rank</th>
+                        <th>Team</th>
+                        <th>Bets</th>
+                        <th>Score</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {players.map((team, i) => (
+                        <tr key={team.id} className={i < 3 ? 'adm-lb-table-top' : ''}>
+                          <td>
+                            <span className={`adm-lb-tbl-rank ${i < 3 ? `adm-lb-tbl-rank-${i}` : ''}`}>
+                              {i + 1}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="adm-lb-tbl-team-name">{team.teamName}</span>
+                          </td>
+                          <td className="adm-lb-tbl-meta">{team.totalBets}</td>
+                          <td>
+                            <span className={`adm-lb-tbl-score font-mono ${i === 0 ? 'adm-lb-tbl-score-gold' : ''}`}>
+                              {team.balance.toFixed(0)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                      {players.length === 0 && (
+                        <tr><td colSpan={4} className="adm-lb-tbl-empty">No teams registered yet</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </motion.div>
+          );
+        })()}
+
+        {/* ═══ SETTINGS TAB ═══ */}
         {activeTab === 'settings' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="admin-section">
+            <div className="admin-settings-grid">
               {gameSettings.map(game => (
-                <div key={game.game_name} style={{ padding: '24px', borderRadius: '16px', background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h3 style={{ fontSize: '16px', fontWeight: 700, textTransform: 'capitalize' }}>
+                <div key={game.game_name} className="admin-setting-card">
+                  <div className="admin-setting-header">
+                    <h3 className="admin-setting-name">
                       {gameIcons[game.game_name] || '🎮'} {game.game_name}
                     </h3>
-                    <button onClick={() => handleToggleGame(game.game_name, !game.is_active)}
-                      className={game.is_active ? 'btn-primary btn-sm' : 'btn-danger btn-sm'}
-                      style={{ padding: '6px 16px', borderRadius: '20px', fontSize: '12px' }}>
-                      {game.is_active ? 'Active' : 'Disabled'}
+                    <button
+                      onClick={() => handleToggleGame(game.game_name, !game.is_active)}
+                      className={`admin-setting-toggle ${game.is_active ? 'admin-setting-active' : 'admin-setting-disabled'}`}
+                    >
+                      {game.is_active ? '● Active' : '○ Disabled'}
                     </button>
                   </div>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Min: {game.min_bet} · Max: {game.max_bet.toLocaleString()}</p>
+                  <p className="admin-setting-limits">Min: {game.min_bet} · Max: {game.max_bet.toLocaleString()}</p>
                 </div>
               ))}
             </div>

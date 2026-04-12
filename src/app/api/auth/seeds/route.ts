@@ -7,8 +7,9 @@ import { generateServerSeed, hashServerSeed } from '@/lib/rng';
 export async function GET(req: NextRequest) {
   try {
     const user = requireAuth(req);
-    const db = getDb();
-    const dbUser = db.prepare('SELECT client_seed, server_seed_hash, nonce FROM users WHERE id = ?').get(user.userId) as any;
+    const db = await getDb();
+    const users = db.collection('users');
+    const dbUser = await users.findOne({ id: user.userId }) as any;
 
     return NextResponse.json({
       clientSeed: dbUser.client_seed,
@@ -24,17 +25,26 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = requireAuth(req);
-    const { action, clientSeed: newClientSeed } = await req.json();
-    const db = getDb();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { action, clientSeed: newClientSeed } = body;
+    const db = await getDb();
+    const users = db.collection('users');
 
     if (action === 'rotate') {
       // Reveal old server seed and generate new one
-      const dbUser = db.prepare('SELECT server_seed, server_seed_hash, client_seed, nonce FROM users WHERE id = ?').get(user.userId) as any;
+      const dbUser = await users.findOne({ id: user.userId }) as any;
       const oldServerSeed = dbUser.server_seed;
       const newServerSeed = generateServerSeed();
 
-      db.prepare('UPDATE users SET server_seed = ?, server_seed_hash = ?, nonce = 0 WHERE id = ?')
-        .run(newServerSeed, hashServerSeed(newServerSeed), user.userId);
+      await users.updateOne(
+        { id: user.userId },
+        { $set: { server_seed: newServerSeed, server_seed_hash: hashServerSeed(newServerSeed), nonce: 0 } }
+      );
 
       return NextResponse.json({
         previousServerSeed: oldServerSeed,
@@ -48,7 +58,7 @@ export async function POST(req: NextRequest) {
       if (newClientSeed.length < 1 || newClientSeed.length > 64) {
         return NextResponse.json({ error: 'Client seed must be 1-64 characters' }, { status: 400 });
       }
-      db.prepare('UPDATE users SET client_seed = ? WHERE id = ?').run(newClientSeed, user.userId);
+      await users.updateOne({ id: user.userId }, { $set: { client_seed: newClientSeed } });
       return NextResponse.json({ clientSeed: newClientSeed, message: 'Client seed updated.' });
     }
 

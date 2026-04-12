@@ -95,7 +95,7 @@ export default function KenoPage() {
 
   if (loading || !user) return <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div className="spinner spinner-light" style={{ width: 32, height: 32 }} /></div>;
 
-  const payoutTable = picks.length > 0 ? KENO_PAYOUTS[picks.length] : {};
+  const payoutTable = picks.length > 0 ? (KENO_PAYOUTS[picks.length] || {}) : {};
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
@@ -162,7 +162,7 @@ export default function KenoPage() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', minHeight: '36px' }}>
                 {picks.length === 0 ? (
                   <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Click numbers to pick</span>
-                ) : picks.sort((a, b) => a - b).map(p => (
+                ) : [...picks].sort((a, b) => a - b).map(p => (
                   <span key={p} className="font-mono" style={{ padding: '4px 8px', borderRadius: '6px', background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)', fontSize: '12px', fontWeight: 700 }}>{p}</span>
                 ))}
               </div>

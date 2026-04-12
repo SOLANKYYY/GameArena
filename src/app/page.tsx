@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import Navbar from '@/components/Navbar';
 import { motion } from 'framer-motion';
+import RulesModal from '@/components/RulesModal';
 
 const games = [
   { id: 'limbo', name: 'Limbo', icon: '🚀', description: 'Set a target multiplier and watch the crash point soar.', accent: '#4dabf7', accentDim: 'rgba(77,171,247,0.12)' },
@@ -41,7 +42,10 @@ export default function HomePage() {
   useEffect(() => {
     if (!token) return;
     const fetchRecent = () => {
-      fetch('/api/bets/recent?limit=15').then(r => r.json()).then(d => setRecentBets(d.bets || [])).catch(() => {});
+      fetch('/api/bets/recent?limit=15', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(d => setRecentBets(d.bets || []))
+        .catch(() => {});
     };
     fetchRecent();
     const interval = setInterval(fetchRecent, 3000);
@@ -58,6 +62,7 @@ export default function HomePage() {
 
   return (
     <div className="lobby-root">
+      <RulesModal />
       <Navbar />
 
       {/* Ambient background effects */}

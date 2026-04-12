@@ -6,7 +6,7 @@ import { requireAdmin } from '@/lib/auth';
 export async function GET(req: NextRequest) {
   try {
     requireAdmin(req);
-    const db = getDb();
+    const db = await getDb();
     
     const { searchParams } = new URL(req.url);
     const game = searchParams.get('game');
@@ -14,24 +14,43 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(Math.max(1, isNaN(limitRaw) ? 100 : limitRaw), 200);
     const validGames = ['limbo', 'dice', 'mines', 'moles', 'wheel', 'plinko', 'keno'];
     const safeGame = game && validGames.includes(game) ? game : null;
-    
-    let query = `
-      SELECT b.id, b.game, b.bet_amount as betAmount, b.outcome, b.payout, b.multiplier, 
-             b.created_at as createdAt, u.username, u.team_name as teamName
-      FROM bets b
-      JOIN users u ON b.user_id = u.id
-    `;
-    const params: any[] = [];
-    
-    if (safeGame) {
-      query += ' WHERE b.game = ?';
-      params.push(safeGame);
-    }
-    
-    query += ' ORDER BY b.created_at DESC LIMIT ?';
-    params.push(limit);
 
-    const history = db.prepare(query).all(...params);
+    const matchStage: any = {};
+    if (safeGame) {
+      matchStage.game = safeGame;
+    }
+
+    const betsCol = db.collection('bets');
+    const history = await betsCol
+      .aggregate([
+        { $match: matchStage },
+        { $sort: { created_at: -1 } },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'user_id',
+            foreignField: 'id',
+            as: 'user',
+          },
+        },
+        { $unwind: '$user' },
+        {
+          $project: {
+            _id: 0,
+            id: 1,
+            game: 1,
+            betAmount: '$bet_amount',
+            outcome: 1,
+            payout: 1,
+            multiplier: 1,
+            createdAt: '$created_at',
+            username: '$user.username',
+            teamName: '$user.team_name',
+          },
+        },
+      ])
+      .toArray();
 
     return NextResponse.json({ history });
   } catch (error: any) {

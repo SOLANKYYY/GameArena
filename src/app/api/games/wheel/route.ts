@@ -2,12 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { WHEEL_PAYOUTS } from '@/lib/constants';
 import { wheelResult } from '@/lib/rng';
-import { getGameContext, checkGameActive, validateBet, recordBet } from '@/lib/gameHelper';
+import { getGameContext, checkGameActive, checkRoundActive, validateBet, recordBet } from '@/lib/gameHelper';
 
 export async function POST(req: NextRequest) {
   try {
     const user = requireAuth(req);
-    const { betAmount, segments, risk } = await req.json();
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { betAmount, segments, risk } = body;
 
     const validSegments = ['10', '20', '30', '40', '50'];
     const validRisks = ['low', 'medium', 'high'];
@@ -19,9 +26,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Risk must be low, medium, or high' }, { status: 400 });
     }
 
-    checkGameActive('wheel');
-    const ctx = getGameContext(user.userId, 1);
-    validateBet(betAmount, ctx.balance, 'wheel');
+    await checkGameActive('wheel');
+    await checkRoundActive(user.role);
+    const ctx = await getGameContext(user.userId, 1);
+    await validateBet(betAmount, ctx.balance, 'wheel');
 
     const payouts = WHEEL_PAYOUTS[String(segments)][risk];
     const segCount = parseInt(String(segments));
@@ -29,7 +37,7 @@ export async function POST(req: NextRequest) {
     const won = multiplier > 0;
     const payout = won ? Math.round(betAmount * multiplier * 100) / 100 : 0;
 
-    const { newBalance } = recordBet(ctx, 'wheel', betAmount, won ? 'win' : 'loss', payout, multiplier, {
+    const { newBalance } = await recordBet(ctx, 'wheel', betAmount, won ? 'win' : 'loss', payout, multiplier, {
       segments: segCount, risk, segmentIndex, multiplier,
     });
 

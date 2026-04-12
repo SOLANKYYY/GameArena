@@ -1,22 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
-import getDb from '@/lib/db';
+import getDb, { getNextSequence } from '@/lib/db';
 import { MOLES_HOLES } from '@/lib/constants';
 
 // POST - report round result and get next round, or end game
 export async function POST(req: NextRequest) {
   try {
     const user = requireAuth(req);
-    const body = await req.json();
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
     const { sessionId, action } = body;
     const roundHits = Number.isInteger(body.roundHits) && body.roundHits >= 0 ? body.roundHits : 0;
     const roundMisses = Number.isInteger(body.roundMisses) && body.roundMisses >= 0 ? body.roundMisses : 0;
     void roundMisses; // derived server-side anyway
 
-    const db = getDb();
-    const session = db.prepare(
-      "SELECT * FROM game_sessions WHERE id = ? AND user_id = ? AND game = 'moles' AND completed_at IS NULL"
-    ).get(sessionId, user.userId) as any;
+    if (!sessionId || typeof sessionId !== 'string') {
+      return NextResponse.json({ error: 'Invalid session ID' }, { status: 400 });
+    }
+
+    const db = await getDb();
+    const gameSessions = db.collection('game_sessions');
+
+    const session = await gameSessions.findOne({
+      id: sessionId,
+      user_id: user.userId,
+      game: 'moles',
+      completed_at: null,
+    }) as any;
 
     if (!session) {
       return NextResponse.json({ error: 'No active session found' }, { status: 404 });
@@ -41,12 +56,14 @@ export async function POST(req: NextRequest) {
 
       // Check if game is over
       if (state.currentRound >= state.maxRounds) {
-        return finalizeGame(db, session, state, user.userId);
+        return await finalizeGame(db, session, state, user.userId);
       }
 
       // Save state and send next round
-      db.prepare('UPDATE game_sessions SET state = ? WHERE id = ?')
-        .run(JSON.stringify(state), sessionId);
+      await gameSessions.updateOne(
+        { id: sessionId },
+        { $set: { state: JSON.stringify(state) } }
+      );
 
       return NextResponse.json({
         action: 'next_round',
@@ -61,8 +78,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'end') {
-      // Player ends early or time ran out
-      return finalizeGame(db, session, state, user.userId);
+      return await finalizeGame(db, session, state, user.userId);
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
@@ -72,7 +88,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function finalizeGame(db: any, session: any, state: any, userId: number) {
+async function finalizeGame(db: any, session: any, state: any, userId: number) {
+  const gameSessions = db.collection('game_sessions');
+  const users = db.collection('users');
+  const betsCol = db.collection('bets');
+
   const hitRate = state.totalMoles > 0 ? (state.hits / state.totalMoles) * 100 : 0;
 
   let multiplier = 0;
@@ -90,29 +110,41 @@ function finalizeGame(db: any, session: any, state: any, userId: number) {
   }
 
   const payout = outcome === 'win' ? Math.round(state.betAmount * multiplier * 100) / 100 : 0;
-
   state.status = 'finished';
 
-  const txn = db.transaction(() => {
-    db.prepare("UPDATE game_sessions SET state = ?, completed_at = datetime('now') WHERE id = ?")
-      .run(JSON.stringify(state), session.id);
+  // FIX #4: Credit payout BEFORE closing session (if it's a win)
+  if (payout > 0) {
+    await users.findOneAndUpdate(
+      { id: userId },
+      { $inc: { balance: Math.round(payout * 100) / 100 } },
+    );
+  }
 
-    if (payout > 0) {
-      const dbUser = db.prepare('SELECT balance FROM users WHERE id = ?').get(userId) as any;
-      const newBalance = Math.round((dbUser.balance + payout) * 100) / 100;
-      db.prepare('UPDATE users SET balance = ? WHERE id = ?').run(newBalance, userId);
-    }
+  // Close session only after payout is secured
+  await gameSessions.updateOne(
+    { id: session.id },
+    { $set: { state: JSON.stringify(state), completed_at: new Date() } }
+  );
 
-    db.prepare(
-      'INSERT INTO bets (user_id, game, bet_amount, outcome, payout, multiplier, details, server_seed, client_seed, nonce) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(userId, 'moles', state.betAmount, outcome, payout, multiplier,
-      JSON.stringify({ hits: state.hits, misses: state.misses, totalMoles: state.totalMoles, hitRate: Math.round(hitRate * 10) / 10, moleCount: state.moleCount }),
-      state.serverSeed, state.clientSeed, state.nonce);
-
-    return db.prepare('SELECT balance FROM users WHERE id = ?').get(userId) as any;
+  const betId = await getNextSequence(db, 'betId');
+  await betsCol.insertOne({
+    id: betId,
+    user_id: userId,
+    game: 'moles',
+    bet_amount: state.betAmount,
+    outcome,
+    payout,
+    multiplier,
+    details: JSON.stringify({ hits: state.hits, misses: state.misses, totalMoles: state.totalMoles, hitRate: Math.round(hitRate * 10) / 10, moleCount: state.moleCount }),
+    server_seed: state.serverSeed,
+    client_seed: state.clientSeed,
+    nonce: state.nonce,
+    created_at: new Date(),
   });
 
-  const result = txn();
+  // FIX #5: Null-safe balance fetch
+  const result = await users.findOne({ id: userId }) as any;
+  const finalBalance = result?.balance ?? 0;
 
   return NextResponse.json({
     action: 'game_over',
@@ -120,7 +152,7 @@ function finalizeGame(db: any, session: any, state: any, userId: number) {
     hitRate: Math.round(hitRate * 10) / 10,
     multiplier,
     payout,
-    newBalance: result.balance,
+    newBalance: finalBalance,
     totalMoles: state.totalMoles,
     hits: state.hits,
     misses: state.misses,
