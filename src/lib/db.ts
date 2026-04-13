@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { DEFAULT_STARTING_BALANCE, ALL_GAMES } from './constants';
 import { generateServerSeed, hashServerSeed, generateClientSeed } from './rng';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://hacktozite_db_user:WhatDaDogDoin%4001@gamearenainfinity.pxnwxf4.mongodb.net/?appName=GameArenaInfinity';
+const MONGODB_URI = process.env.MONGODB_URI as string;
 const DB_NAME = process.env.DB_NAME || 'GameArenaInfinity';
 
 let client: MongoClient | null = null;
