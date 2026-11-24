@@ -9,34 +9,12 @@ export async function GET(req: NextRequest) {
     const db = await getDb();
 
     const betsCol = db.collection('bets');
-    const bets = await betsCol
-      .aggregate([
-        { $sort: { created_at: -1 } },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'user_id',
-            foreignField: 'id',
-            as: 'user',
-          },
-        },
-        { $unwind: '$user' },
-        {
-          $project: {
-            _id: 0,
-            id: 1,
-            team_name: '$user.team_name',
-            username: '$user.username',
-            game: 1,
-            bet_amount: 1,
-            outcome: 1,
-            payout: 1,
-            multiplier: 1,
-            created_at: 1,
-          },
-        },
-      ])
-      .toArray();
+    const raw = await betsCol.find({}, { sort: { created_at: -1 } }).toArray();
+    const owners = await db.collection('users').find({}).toArray();
+    const byId = new Map(owners.map((u: any) => [u.id, u]));
+    const bets = raw.filter((b: any) => byId.has(b.user_id)).map((b: any) => ({
+      ...b, team_name: byId.get(b.user_id).team_name, username: byId.get(b.user_id).username,
+    }));
 
     // Build CSV
     const headers = ['ID', 'Team', 'Username', 'Game', 'Bet Amount', 'Outcome', 'Payout', 'Multiplier', 'Time'];

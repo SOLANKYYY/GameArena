@@ -12,47 +12,19 @@ export async function GET(req: NextRequest) {
     const db = await getDb();
     const users = db.collection('users');
 
-    const teams = await users
-      .aggregate([
-        {
-          $lookup: {
-            from: 'bets',
-            let: { userId: '$id' },
-            pipeline: [
-              { $match: { $expr: { $eq: ['$user_id', '$$userId'] } } },
-              {
-                $group: {
-                  _id: null,
-                  totalBets: { $sum: 1 },
-                  totalWon: {
-                    $sum: { $cond: [{ $eq: ['$outcome', 'win'] }, '$payout', 0] }
-                  },
-                  totalLost: {
-                    $sum: { $cond: [{ $eq: ['$outcome', 'loss'] }, '$bet_amount', 0] }
-                  }
-                }
-              }
-            ],
-            as: 'betStats',
-          },
-        },
-        {
-          $project: {
-            _id: 0,
-            id: 1,
-            username: 1,
-            teamName: '$team_name',
-            balance: 1,
-            role: 1,
-            createdAt: '$created_at',
-            totalBets: { $ifNull: [{ $arrayElemAt: ['$betStats.totalBets', 0] }, 0] },
-            totalWon: { $ifNull: [{ $arrayElemAt: ['$betStats.totalWon', 0] }, 0] },
-            totalLost: { $ifNull: [{ $arrayElemAt: ['$betStats.totalLost', 0] }, 0] },
-          },
-        },
-        { $sort: { balance: -1 } },
-      ])
-      .toArray();
+    const all = await users.find({}, { sort: { balance: -1 } }).toArray();
+    const allBets = await db.collection('bets').find({}).toArray();
+    const stats = new Map<number, any>();
+    for (const b of allBets as any[]) {
+      const s = stats.get(b.user_id) || { totalBets: 0, totalWon: 0, totalLost: 0 };
+      s.totalBets += 1;
+      if (b.outcome === 'win') s.totalWon += b.payout; else if (b.outcome === 'loss') s.totalLost += b.bet_amount;
+      stats.set(b.user_id, s);
+    }
+    const teams = all.map((u: any) => ({
+      id: u.id, username: u.username, teamName: u.team_name, balance: u.balance, role: u.role, createdAt: u.created_at,
+      totalBets: stats.get(u.id)?.totalBets || 0, totalWon: stats.get(u.id)?.totalWon || 0, totalLost: stats.get(u.id)?.totalLost || 0,
+    }));
 
     return NextResponse.json({ teams });
   } catch (error: any) {

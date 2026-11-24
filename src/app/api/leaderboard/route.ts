@@ -11,33 +11,17 @@ export async function GET(req: NextRequest) {
     const betsCol = db.collection('bets');
 
     // Run two fast queries in parallel instead of one expensive $lookup
-    const [playerList, betStats] = await Promise.all([
-      // 1. Fast indexed query — just get players sorted by balance
-      users
-        .find({ role: 'player' }, {
-          projection: { _id: 0, id: 1, username: 1, team_name: 1, balance: 1 },
-          sort: { balance: -1 },
-          limit: 50,
-        })
-        .toArray(),
-
-      // 2. Single aggregation on bets — group by user_id (uses user_id index)
-      betsCol
-        .aggregate([
-          {
-            $group: {
-              _id: '$user_id',
-              totalBets: { $sum: 1 },
-              totalWon: { $sum: { $cond: [{ $eq: ['$outcome', 'win'] }, '$payout', 0] } },
-              totalLost: { $sum: { $cond: [{ $eq: ['$outcome', 'loss'] }, '$bet_amount', 0] } },
-            },
-          },
-        ])
-        .toArray(),
-    ]);
-
-    // Merge in JS (O(n) with Map — faster than per-user $lookup)
-    const statsMap = new Map(betStats.map((s: any) => [s._id, s]));
+    const playerList = await users
+      .find({ role: 'player' }, { sort: { balance: -1 }, limit: 50 })
+      .toArray();
+    const allBets = await betsCol.find({ user_id: { $in: playerList.map((p: any) => p.id) } }).toArray();
+    const statsMap = new Map<number, any>();
+    for (const b of allBets as any[]) {
+      const s = statsMap.get(b.user_id) || { totalBets: 0, totalWon: 0, totalLost: 0 };
+      s.totalBets += 1;
+      if (b.outcome === 'win') s.totalWon += b.payout; else if (b.outcome === 'loss') s.totalLost += b.bet_amount;
+      statsMap.set(b.user_id, s);
+    }
 
     const leaderboard = playerList.map((p: any) => {
       const s = statsMap.get(p.id);

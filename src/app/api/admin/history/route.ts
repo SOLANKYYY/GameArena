@@ -21,36 +21,14 @@ export async function GET(req: NextRequest) {
     }
 
     const betsCol = db.collection('bets');
-    const history = await betsCol
-      .aggregate([
-        { $match: matchStage },
-        { $sort: { created_at: -1 } },
-        { $limit: limit },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'user_id',
-            foreignField: 'id',
-            as: 'user',
-          },
-        },
-        { $unwind: '$user' },
-        {
-          $project: {
-            _id: 0,
-            id: 1,
-            game: 1,
-            betAmount: '$bet_amount',
-            outcome: 1,
-            payout: 1,
-            multiplier: 1,
-            createdAt: '$created_at',
-            username: '$user.username',
-            teamName: '$user.team_name',
-          },
-        },
-      ])
-      .toArray();
+    const latest = await betsCol.find(matchStage, { sort: { created_at: -1 }, limit }).toArray();
+    const owners = await db.collection('users').find({ id: { $in: [...new Set(latest.map((b: any) => b.user_id))] } }).toArray();
+    const byId = new Map(owners.map((u: any) => [u.id, u]));
+    const history = latest.filter((b: any) => byId.has(b.user_id)).map((b: any) => ({
+      id: b.id, game: b.game, betAmount: b.bet_amount, outcome: b.outcome, payout: b.payout,
+      multiplier: b.multiplier, createdAt: b.created_at,
+      username: byId.get(b.user_id).username, teamName: byId.get(b.user_id).team_name,
+    }));
 
     return NextResponse.json({ history });
   } catch (error: any) {

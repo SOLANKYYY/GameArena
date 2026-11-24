@@ -1,10 +1,10 @@
 # Curse the Code – Hollow House Arena
 
-Halloween-themed betting arena (Next.js + MongoDB).
+Halloween-themed betting arena (Next.js + Supabase/Postgres).
 
 ## Run
 ```bash
-cp .env.example .env.local   # fill in MONGODB_URI etc.
+cp .env.example .env.local   # fill in DATABASE_URL etc. (Supabase)
 npm install
 npm run dev                  # binds 0.0.0.0:3000
 ```
