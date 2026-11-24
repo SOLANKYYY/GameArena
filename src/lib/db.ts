@@ -81,6 +81,7 @@ async function getNextSequence(database: Db, name: string): Promise<number> {
 }
 
 async function connectAndInit(): Promise<Db> {
+  if (!MONGODB_URI) throw new Error('MONGODB_URI is not set. Add it in your hosting environment variables (e.g. Netlify > Site configuration > Environment variables) and redeploy.');
   const newClient = new MongoClient(MONGODB_URI, {
     maxPoolSize: 50,
     minPoolSize: 5,
