@@ -1,0 +1,140 @@
+/* Hollow House: moonlit stone, old parchment and candlelight. */
+:root {
+  color-scheme: dark;
+  --bg-primary: #0b0c10;
+  --bg-secondary: #141318;
+  --bg-tertiary: #1d1921;
+  --bg-input: #0b0b0f;
+  --surface-container: #1d1921;
+  --surface-container-high: #29222c;
+  --surface-container-highest: #352c39;
+  --surface-container-low: #141318;
+  --surface-container-lowest: #09090d;
+  --surface-bright: #443543;
+  --surface-variant: #302630;
+  --text-primary: #f2e8d8;
+  --text-secondary: #c3b6af;
+  --text-muted: #a899a5;
+  --primary: #f6b768;
+  --primary-container: #d97b37;
+  --accent-orange: #f6b768;
+  --accent-green: #f6b768;
+  --accent-green-hover: #ffcb8c;
+  --accent-purple: #baa1d0;
+  --accent-cyan: #9cc9bd;
+  --border: rgba(209, 170, 126, .16);
+  --border-hover: rgba(239, 184, 118, .4);
+  --border-input: rgba(209, 170, 126, .2);
+  --glass-bg: rgba(20, 17, 23, .92);
+  --font-gothic: 'Cinzel', Georgia, serif;
+  --font-story: 'Cormorant Garamond', Georgia, serif;
+}
+body { background: radial-gradient(ellipse at 80% 0, #241b2b 0, transparent 50%), var(--bg-primary); }
+button, a, input { -webkit-tap-highlight-color: transparent; }
+::selection { background: #8c4a28; color: #fff3de; }
+:focus-visible { outline: 2px solid #f6b768; outline-offset: 4px; }
+.skip-link { position: fixed; left: 16px; top: -80px; z-index: 10000; background: #f6b768; color: #170d08; padding: 12px 18px; border-radius: 4px; font-weight: 700; }
+.skip-link:focus { top: 16px; }
+.spooky-decor { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.web { position: absolute; width: 135px; height: 135px; color: #baa1d0; opacity: .12; }
+.web-l { left: 0; top: 0; }
+.haunt-mist { position: absolute; width: 130%; height: 28%; left: -15%; bottom: -8%; background: radial-gradient(ellipse, #b8a7c012, transparent 65%); animation: mist-drift 26s ease-in-out infinite alternate; }
+.haunt-mist-two { bottom: 42%; opacity: .4; animation-delay: -13s; }
+.haunt-ember { position: absolute; bottom: -12px; width: 3px; height: 3px; border-radius: 50%; background: #eea362; box-shadow: 0 0 10px #e39255; animation: ember-rise 20s linear infinite; opacity: 0; }
+@keyframes mist-drift { to { transform: translate3d(8%, -8%, 0); } }
+@keyframes ember-rise { 15% { opacity: .4; } 80% { opacity: .15; } 100% { transform: translate3d(35px, -85vh, 0); opacity: 0; } }
+.gothic-eyebrow, .season-label { font-size: .75rem; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: #dbac79; }
+
+/* The entrance */
+.login-root { isolation: isolate; min-height: 100svh; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(360px, .8fr); gap: 64px; align-items: center; padding: 140px max(6vw, 24px) 84px; background: #0b0c10; }
+.login-scene { position: absolute; z-index: -2; inset: 0; background: linear-gradient(90deg, #0b0c1010 20%, #0b0c1055 53%, #0b0c10 79%), linear-gradient(0deg, #0b0c10, transparent 32%), url('/hollow-house.svg') left center / auto 100% no-repeat; opacity: .85; }
+.login-bg-glow { display: none; }
+.login-masthead { position: absolute; top: 32px; left: max(6vw, 24px); right: max(6vw, 24px); display: flex; justify-content: space-between; align-items: center; gap: 20px; border-bottom: 1px solid var(--border); padding-bottom: 22px; }
+.login-wordmark { display: flex; align-items: center; gap: 12px; color: #e9c89f; font: 600 1.1rem var(--font-gothic); letter-spacing: .06em; }
+.season-label { color: var(--text-muted); font-size: .75rem; letter-spacing: .15em; }
+.login-story { position: relative; z-index: 2; align-self: center; max-width: 660px; padding: 30px 0; }
+.login-story h1 { font: 500 clamp(3.8rem, 6.3vw, 6.5rem)/.98 var(--font-story); letter-spacing: -.045em; margin: 28px 0; color: #f4e8d7; text-shadow: 0 3px 24px #08090e; }
+.login-story h1 em { color: #efad68; font-weight: 500; }
+.login-story > p:not(.gothic-eyebrow) { color: #d3c6bf; line-height: 1.9; font-size: 1rem; text-shadow: 0 2px 12px #000; }
+.story-seal { display: flex; align-items: center; gap: 16px; margin-top: 42px; font: 500 .8rem var(--font-gothic); letter-spacing: .08em; color: #e1b582; }
+.story-seal span { font-size: 1.3rem; }
+.login-container { max-width: 450px; justify-self: end; padding: 48px 32px 28px; border: 1px solid #81604466; border-radius: 180px 180px 10px 10px; background: linear-gradient(180deg, #211a25ee, #100e14f5); box-shadow: 0 30px 100px #0008, inset 0 0 0 7px #100e1480; }
+.login-logo-section { margin-bottom: 30px; }
+.login-logo-glow { color: #e9b77b; margin-bottom: 20px; filter: drop-shadow(0 0 18px #c8773b30); }
+.login-logo-section .gothic-eyebrow { font-size: .65rem; letter-spacing: .18em; margin: 0 0 12px; }
+.login-title { font: 500 clamp(1.9rem, 2.6vw, 2.5rem)/1.1 var(--font-story); letter-spacing: -.02em; background: none; -webkit-text-fill-color: initial; color: #f2e8d8; margin: 0 0 10px; }
+.login-subtitle { font-size: .875rem; margin: 0; }
+.login-form { padding: 0; border: 0; border-radius: 0; background: none; backdrop-filter: none; box-shadow: none; }
+.login-label { font: 500 .875rem 'Inter', sans-serif; text-transform: none; letter-spacing: 0; color: #d7c9bd; }
+.login-input { border: 1px solid #b88d6233; border-radius: 5px; background: #0b0a0f; font-size: 1rem; padding: 14px 16px; }
+.login-input::placeholder { color: #95838e; }
+.login-submit-btn { border: 1px solid #efb477; border-radius: 5px; background: linear-gradient(110deg, #cb7135, #f0b66e); color: #22130c; font-weight: 700; }
+.login-footer { font-size: .8125rem; line-height: 1.6; margin-top: 22px; }
+
+/* The house and its seven rooms */
+.navbar-root { border-bottom: 1px solid var(--border); background: #0f0d13ee; }
+.navbar-logo-link { color: #e9b77b; }
+.navbar-brand { font-family: var(--font-gothic); font-size: 1rem; letter-spacing: .025em; }
+.navbar-link { border-radius: 5px; }
+.navbar-link-active { background: #d98a3c16; color: #f6b768; border-color: #c9955933; }
+.lobby-root, .lb-page-root { background: radial-gradient(ellipse at 65% 0, #2a1d2d55, transparent 50%), var(--bg-primary); }
+.lobby-main { gap: 36px; }
+.lobby-hero { position: relative; isolation: isolate; overflow: hidden; min-height: 310px; padding: 40px; border: 1px solid #b88d623b; border-radius: 8px; background: #131018; }
+.lobby-hero::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, #131018 10%, #13101888 55%, #13101833), url('/hollow-house.svg') 75% 43% / cover; opacity: .75; }
+.lobby-hero-text { min-width: 0; }
+.lobby-hero-label { font: 500 .75rem 'Inter', sans-serif; letter-spacing: .16em; background: none; -webkit-text-fill-color: initial; color: #e3b781; }
+.lobby-hero-title { font: 500 clamp(2rem, 4vw, 3.6rem)/1.08 var(--font-story); letter-spacing: -.025em; max-width: 660px; overflow-wrap: anywhere; }
+.lobby-hero-name { color: #f3b66f; background: none; -webkit-text-fill-color: initial; }
+.lobby-hero-subtitle { color: #d0c1ba; }
+.lobby-balance-card { background: #110e16d9; border: 1px solid #bc915746; border-radius: 6px; backdrop-filter: blur(12px); }
+.lobby-balance-label { font-size: .75rem; letter-spacing: .15em; }
+.lobby-balance-badge { color: #dbbf9c; background: #b88d6214; font-size: .75rem; }
+.lobby-section-title { font: 500 1.6rem var(--font-story); letter-spacing: .015em; }
+.lobby-section-icon { display: none; }
+.lobby-section-count { font-size: .8125rem; color: var(--text-muted); }
+.lobby-game-card { border: 1px solid #a4866330; border-radius: 7px; background: linear-gradient(145deg, #221b28, #121016); position: relative; overflow: hidden; }
+.lobby-game-card::before { content: ''; position: absolute; width: 135px; height: 135px; right: -45px; top: -40px; border: 1px solid #c8a27320; border-radius: 50%; box-shadow: 0 0 0 12px #c8a27306, 0 0 0 24px #c8a27306; pointer-events: none; }
+.lobby-game-card:hover { border-color: #d6a36788; box-shadow: 0 12px 35px #0004; }
+.lobby-game-card-inner { position: relative; }
+.lobby-game-icon-wrap { border-radius: 50% 50% 6px 6px; border: 1px solid #c995593d; background: radial-gradient(ellipse at top, #a16d3e30, #151018); }
+.lobby-game-icon { filter: sepia(.4) saturate(.65); }
+.game-chapter { margin: 0 0 8px; font-size: .7rem; color: #c7a67f; text-transform: uppercase; letter-spacing: .12em; }
+.lobby-game-name { font: 600 1.65rem var(--font-story); letter-spacing: .02em; }
+.lobby-game-desc { color: #bdb0ba; font-size: .875rem; line-height: 1.65; }
+.lobby-game-play { color: #efb87c; font-size: .875rem; }
+.lobby-game-accent { background: linear-gradient(90deg, transparent, #d79c59, transparent); opacity: .5; }
+.lobby-panel, .lobby-ticker-container, .lb-top-bar, .lb-table-section { border-radius: 7px; border-color: var(--border); }
+.lobby-panel-title { font-family: var(--font-story); font-size: 1.4rem; }
+.btn-primary, .btn-secondary, .input-dark, .quick-btn { border-radius: 6px; }
+.game-grid-2col h1, .game-grid-2col h2, main > div > h1 { font-family: var(--font-story); }
+
+@media (min-width: 1500px) { .login-scene { background-size: auto, auto, cover; } }
+@media (max-width: 1000px) {
+  .login-root { gap: 32px; padding-left: 32px; padding-right: 32px; }
+  .login-container { padding: 44px 25px 24px; }
+  .login-story h1 { font-size: 4.5rem; }
+  .lobby-hero { padding: 28px; gap: 24px; }
+}
+@media (max-width: 760px) {
+  .login-root { grid-template-columns: 1fr; gap: 30px; padding: 112px 22px 40px; }
+  .login-masthead { top: 22px; left: 22px; right: 22px; padding-bottom: 18px; }
+  .season-label { font-size: .625rem; max-width: 120px; text-align: right; }
+  .login-scene { background: linear-gradient(0deg, #0b0c10 20%, #0b0c1044 70%), url('/hollow-house.svg') 58% top / auto 640px no-repeat; }
+  .login-story { padding: 10px 0 0; text-align: center; justify-self: center; }
+  .login-story h1 { font-size: clamp(3.2rem, 10vw, 4.6rem); margin: 18px 0; }
+  .login-story .gothic-eyebrow { font-size: .625rem; }
+  .login-story > p:not(.gothic-eyebrow) { font-size: .875rem; }
+  .story-seal { display: none; }
+  .login-container { justify-self: center; border-radius: 100px 100px 8px 8px; padding: 30px 26px 24px; }
+  .login-logo-glow { margin-bottom: 12px; }
+  .login-logo-section { margin-bottom: 24px; }
+  .lobby-hero { flex-direction: column; align-items: stretch; }
+  .lobby-balance-card { min-width: 0; width: 100%; }
+  .lobby-main { padding: 24px 16px 60px; gap: 28px; }
+  .lobby-hero-title { font-size: 2.4rem; }
+  .web { width: 80px; height: 80px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+  .haunt-ember, .haunt-mist { display: none; }
+}

@@ -12,7 +12,10 @@ export async function POST(req: NextRequest) {
     }
     const { key } = body;
 
-    const ADMIN_KEY = process.env.ADMIN_KEY || 'default-secret-admin-key-2026';
+    const ADMIN_KEY = process.env.ADMIN_KEY;
+    if (!ADMIN_KEY) {
+      return NextResponse.json({ error: 'Admin magic login is disabled' }, { status: 503 });
+    }
 
     if (!key || key !== ADMIN_KEY) {
       return NextResponse.json({ error: 'Invalid admin access key' }, { status: 401 });

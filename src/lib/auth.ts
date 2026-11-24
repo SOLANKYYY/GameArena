@@ -10,10 +10,12 @@ export interface JwtPayload {
 }
 
 export function signToken(payload: JwtPayload): string {
+  if (!JWT_SECRET) throw new Error('JWT_SECRET must be configured before signing in.');
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
 }
 
 export function verifyToken(token: string): JwtPayload | null {
+  if (!JWT_SECRET) return null;
   try {
     return jwt.verify(token, JWT_SECRET) as JwtPayload;
   } catch {

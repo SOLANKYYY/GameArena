@@ -5,29 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import HauntedEmblem from '@/components/HauntedEmblem';
 
-function ArenaLogoLarge() {
-  return (
-    <svg width="64" height="64" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="logoGradLg" x1="0" y1="0" x2="36" y2="36">
-          <stop offset="0%" stopColor="#ff7a1a" />
-          <stop offset="100%" stopColor="#ffa347" />
-        </linearGradient>
-      </defs>
-      <rect width="36" height="36" rx="10" fill="url(#logoGradLg)" />
-      <path
-        d="M18 8L26 12V19C26 23.5 22.5 27 18 28.5C13.5 27 10 23.5 10 19V12L18 8Z"
-        fill="rgba(255,255,255,0.15)"
-        stroke="rgba(255,255,255,0.5)"
-        strokeWidth="0.8"
-      />
-      <path d="M14 22L22 14" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M22 22L14 14" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-      <rect x="16" y="16" width="4" height="4" rx="1" fill="white" transform="rotate(45 18 18)" />
-    </svg>
-  );
-}
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -51,7 +30,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await login(username, password);
-      toast.success('Welcome back!');
+      toast.success('Welcome back to Hollow House');
       router.push('/');
     } catch (err: any) {
       toast.error(err.message);
@@ -65,7 +44,14 @@ export default function LoginPage() {
       {/* Background effects */}
       <div className="login-bg-glow login-bg-glow-1" />
       <div className="login-bg-glow login-bg-glow-2" />
-      <div className="login-bg-grid" />
+      <div className="login-scene" aria-hidden="true" />
+      <div className="login-masthead"><span className="login-wordmark"><HauntedEmblem size={32} /> GameArena</span><span className="season-label">The Halloween chapter</span></div>
+      <section className="login-story" aria-labelledby="house-title">
+        <p className="gothic-eyebrow">Beyond the gates of Hollow House</p>
+        <h1 id="house-title">Some games<br />stay with you.<br /><em>Forever.</em></h1>
+        <p>Seven cursed games. One restless house.<br />Step into the shadows and tempt your fate.</p>
+        <div className="story-seal"><span aria-hidden="true">✧</span> A Halloween mystery awaits <span aria-hidden="true">✧</span></div>
+      </section>
 
       <motion.div
         initial={{ opacity: 0, y: 30 }}
@@ -76,10 +62,11 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="login-logo-section">
           <div className="login-logo-glow">
-            <ArenaLogoLarge />
+            <HauntedEmblem size={56} />
           </div>
-          <h1 className="login-title">Curse the Code</h1>
-          <p className="login-subtitle">Enter, if you dare… the house is waiting</p>
+          <p className="gothic-eyebrow">Hollow House invites you</p>
+          <h2 className="login-title">Enter the unknown</h2>
+          <p className="login-subtitle">Sign in to begin your haunting.</p>
         </div>
 
         {/* Form */}
@@ -117,8 +104,9 @@ export default function LoginPage() {
             type="submit"
             disabled={isLoading}
             className="login-submit-btn"
+            aria-busy={isLoading}
           >
-            {isLoading ? '⏳ Signing in...' : 'Sign In'}
+            {isLoading ? 'Opening the gates...' : 'Enter Hollow House'}
           </button>
         </form>
 

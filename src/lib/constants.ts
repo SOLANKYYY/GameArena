@@ -1,5 +1,5 @@
 export const DEFAULT_STARTING_BALANCE = 1000;
-export const JWT_SECRET = process.env.JWT_SECRET || 'game-arena-secret-key-change-in-production';
+export const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'game-arena-local-development-only');
 export const JWT_EXPIRY = '8h';
 export const MIN_BET = 1;
 export const MAX_BET = 1000000;

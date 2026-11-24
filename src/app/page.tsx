@@ -9,13 +9,13 @@ import { motion } from 'framer-motion';
 import RulesModal from '@/components/RulesModal';
 
 const games = [
-  { id: 'limbo', name: 'Limbo', icon: '🚀', description: 'Set a target multiplier and watch the crash point soar.', accent: '#4dabf7', accentDim: 'rgba(77,171,247,0.12)' },
-  { id: 'dice', name: 'Dice', icon: '🎲', description: 'Roll over or under your target number to win.', accent: '#c084fc', accentDim: 'rgba(192,132,252,0.12)' },
-  { id: 'mines', name: 'Mines', icon: '💎', description: 'Reveal gems and avoid mines. Cash out anytime.', accent: '#22d3ee', accentDim: 'rgba(34,211,238,0.12)' },
-  { id: 'moles', name: 'Moles', icon: '🔨', description: 'Whack moles across rounds for big multipliers.', accent: '#fb923c', accentDim: 'rgba(251,146,60,0.12)' },
-  { id: 'wheel', name: 'Wheel', icon: '🎡', description: 'Spin the fortune wheel and land on a payout.', accent: '#f472b6', accentDim: 'rgba(244,114,182,0.12)' },
-  { id: 'plinko', name: 'Plinko', icon: '📍', description: 'Drop a ball through the pin board to winnings.', accent: '#ed4163', accentDim: 'rgba(237,65,99,0.12)' },
-  { id: 'keno', name: 'Keno', icon: '🎯', description: 'Pick your lucky numbers and match the draw.', accent: '#fbbf24', accentDim: 'rgba(251,191,36,0.12)' },
+  { id: 'limbo', name: 'Limbo', chapter: 'The endless descent', icon: '🚀', description: 'Set a target multiplier and watch the crash point soar.', accent: '#4dabf7', accentDim: 'rgba(77,171,247,0.12)' },
+  { id: 'dice', name: 'Dice', chapter: 'Bones of fortune', icon: '🎲', description: 'Roll over or under your target number to win.', accent: '#c084fc', accentDim: 'rgba(192,132,252,0.12)' },
+  { id: 'mines', name: 'Mines', chapter: 'The buried secret', icon: '💎', description: 'Reveal gems and avoid mines. Cash out anytime.', accent: '#22d3ee', accentDim: 'rgba(34,211,238,0.12)' },
+  { id: 'moles', name: 'Moles', chapter: 'Something below', icon: '🔨', description: 'Whack moles across rounds for big multipliers.', accent: '#fb923c', accentDim: 'rgba(251,146,60,0.12)' },
+  { id: 'wheel', name: 'Wheel', chapter: 'The fate ritual', icon: '🎡', description: 'Spin the fortune wheel and land on a payout.', accent: '#f472b6', accentDim: 'rgba(244,114,182,0.12)' },
+  { id: 'plinko', name: 'Plinko', chapter: 'A fall into darkness', icon: '📍', description: 'Drop a ball through the pin board to winnings.', accent: '#ed4163', accentDim: 'rgba(237,65,99,0.12)' },
+  { id: 'keno', name: 'Keno', chapter: 'The forgotten numbers', icon: '🎯', description: 'Pick your lucky numbers and match the draw.', accent: '#fbbf24', accentDim: 'rgba(251,191,36,0.12)' },
 ];
 
 interface RecentBet {
@@ -78,11 +78,11 @@ export default function HomePage() {
           transition={{ duration: 0.6, ease: [0.2, 0, 0, 1] }}
         >
           <div className="lobby-hero-text">
-            <p className="lobby-hero-label">🎃 HOLLOW HOUSE ARENA</p>
+            <p className="lobby-hero-label">GAMEARENA · THE HALLOWEEN CHAPTER</p>
             <h1 className="lobby-hero-title">
-              The house remembers you, <span className="lobby-hero-name">{user.teamName}</span>
+              Welcome back to the shadows, <span className="lobby-hero-name">{user.teamName}</span>
             </h1>
-            <p className="lobby-hero-subtitle">Choose your curse, and wager before midnight</p>
+            <p className="lobby-hero-subtitle">Seven doors. Seven games. The house is keeping score.</p>
           </div>
 
           {/* Balance Card - Glassmorphism */}
@@ -96,7 +96,7 @@ export default function HomePage() {
             <div className="lobby-balance-inner">
               <div className="lobby-balance-header">
                 <span className="lobby-balance-label">TOTAL BALANCE</span>
-                <div className="lobby-balance-badge">🟢 Live</div>
+                <div className="lobby-balance-badge">Arena coins</div>
               </div>
               <div className="lobby-balance-amount">
                 <span className="lobby-balance-coin">🪙</span>
@@ -117,7 +117,7 @@ export default function HomePage() {
           <div className="lobby-section-header">
             <h2 className="lobby-section-title">
               <span className="lobby-section-icon">🎮</span>
-              Choose Your Game
+              Choose your haunting
             </h2>
             <span className="lobby-section-count">{games.length} games available</span>
           </div>
@@ -130,7 +130,7 @@ export default function HomePage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.25 + i * 0.05, duration: 0.45, ease: [0.2, 0, 0, 1] }}
               >
-                <Link href={`/games/${game.id}`} className="lobby-game-card" style={{ '--game-accent': game.accent, '--game-accent-dim': game.accentDim } as React.CSSProperties}>
+                <Link href={`/games/${game.id}`} className={`lobby-game-card haunt-${game.id}`} style={{ '--game-accent': game.accent, '--game-accent-dim': game.accentDim } as React.CSSProperties}>
                   <div className="lobby-game-card-inner">
                     {/* Icon */}
                     <div className="lobby-game-icon-wrap">
@@ -138,15 +138,13 @@ export default function HomePage() {
                     </div>
                     {/* Content */}
                     <div className="lobby-game-content">
+                      <p className="game-chapter">{game.chapter}</p>
                       <h3 className="lobby-game-name">{game.name}</h3>
                       <p className="lobby-game-desc">{game.description}</p>
                     </div>
                     {/* CTA */}
                     <div className="lobby-game-cta">
-                      <span className="lobby-game-play">Play</span>
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ transition: 'transform 0.25s ease' }}>
-                        <path d="M6 3L11 8L6 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
+                      <span className="lobby-game-play">Enter game</span>
                     </div>
                   </div>
                   {/* Bottom accent line */}

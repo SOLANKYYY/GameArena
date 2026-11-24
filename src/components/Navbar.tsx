@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import HauntedEmblem from '@/components/HauntedEmblem';
 
 const navLinks = [
   { href: '/games/limbo', label: 'Limbo', icon: '🚀' },
@@ -15,35 +16,6 @@ const navLinks = [
   { href: '/games/keno', label: 'Keno', icon: '🎯' },
 ];
 
-function ArenaLogo() {
-  return (
-    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="logoGrad" x1="0" y1="0" x2="36" y2="36">
-          <stop offset="0%" stopColor="#ff7a1a" />
-          <stop offset="100%" stopColor="#ffa347" />
-        </linearGradient>
-        <linearGradient id="swordGrad" x1="10" y1="10" x2="26" y2="26">
-          <stop offset="0%" stopColor="#ffffff" />
-          <stop offset="100%" stopColor="#e2e8f0" />
-        </linearGradient>
-      </defs>
-      <rect width="36" height="36" rx="10" fill="url(#logoGrad)" />
-      {/* Shield shape */}
-      <path
-        d="M18 8L26 12V19C26 23.5 22.5 27 18 28.5C13.5 27 10 23.5 10 19V12L18 8Z"
-        fill="rgba(255,255,255,0.15)"
-        stroke="rgba(255,255,255,0.5)"
-        strokeWidth="0.8"
-      />
-      {/* Crossed swords */}
-      <path d="M14 22L22 14" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M22 22L14 14" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-      {/* Center diamond */}
-      <rect x="16" y="16" width="4" height="4" rx="1" fill="white" transform="rotate(45 18 18)" />
-    </svg>
-  );
-}
 
 function formatTime(seconds: number): string {
   if (seconds <= 0) return '00:00:00';
@@ -114,7 +86,7 @@ export default function Navbar() {
       <div className="navbar-inner">
         {/* Logo */}
         <Link href="/" className="navbar-logo-link">
-          <ArenaLogo />
+          <HauntedEmblem size={36} />
           <span className="navbar-brand">Game Arena</span>
         </Link>
 

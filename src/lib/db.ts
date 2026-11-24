@@ -4,7 +4,7 @@ import { DEFAULT_STARTING_BALANCE, ALL_GAMES } from './constants';
 import { generateServerSeed, hashServerSeed, generateClientSeed } from './rng';
 
 const DATABASE_URL = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL || '';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin321';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === 'production' ? '' : 'admin321');
 
 let db: Db | null = null;
 let initPromise: Promise<Db> | null = null;
@@ -272,10 +272,15 @@ async function getNextSequence(_database: Db, name: string): Promise<number> {
 }
 
 async function connectAndInit(): Promise<Db> {
+  if (!ADMIN_PASSWORD) throw new Error('ADMIN_PASSWORD must be configured before database initialization.');
   const p = getPool();
   await p.query('CREATE TABLE IF NOT EXISTS counters (name text PRIMARY KEY, seq bigint NOT NULL)');
+  await p.query('ALTER TABLE counters ENABLE ROW LEVEL SECURITY');
   for (const c of COLLECTIONS) {
     await p.query(`CREATE TABLE IF NOT EXISTS ${c} (_id text PRIMARY KEY, doc jsonb NOT NULL)`);
+    // Only the trusted server database role accesses these tables.
+    // No browser Data API policies are granted.
+    await p.query(`ALTER TABLE ${c} ENABLE ROW LEVEL SECURITY`);
   }
   await p.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_username_uq ON users ((doc->>'username'))`);
   await p.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_id_uq ON users (((doc->>'id')::bigint))`);
