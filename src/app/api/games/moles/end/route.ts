@@ -1,92 +1,79 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { NextResponse } from 'next/server';
+import { playerAction } from '@/lib/playerAction';
 import getDb, { getNextSequence } from '@/lib/db';
 import { MOLES_HOLES } from '@/lib/constants';
 
 // POST - report round result and get next round, or end game
-export async function POST(req: NextRequest) {
+export const POST = playerAction(async (user, body) => {
+  const { sessionId, action } = body;
+  const roundHits = Number.isInteger(body.roundHits) && body.roundHits >= 0 ? body.roundHits : 0;
+  const roundMisses = Number.isInteger(body.roundMisses) && body.roundMisses >= 0 ? body.roundMisses : 0;
+  void roundMisses; // derived server-side anyway
+
+  if (!sessionId || typeof sessionId !== 'string') {
+    return NextResponse.json({ error: 'Invalid session ID' }, { status: 400 });
+  }
+
+  const db = await getDb();
+  const gameSessions = db.collection('game_sessions');
+
+  const session = await gameSessions.findOne({
+    id: sessionId,
+    user_id: user.userId,
+    game: 'moles',
+    completed_at: null,
+  }) as any;
+
+  if (!session) {
+    return NextResponse.json({ error: 'No active session found' }, { status: 404 });
+  }
+
+  let state: any;
   try {
-    const user = requireAuth(req);
+    state = JSON.parse(session.state);
+  } catch {
+    return NextResponse.json({ error: 'Corrupted session state' }, { status: 500 });
+  }
 
-    let body: any;
-    try {
-      body = await req.json();
-    } catch {
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
-    }
-    const { sessionId, action } = body;
-    const roundHits = Number.isInteger(body.roundHits) && body.roundHits >= 0 ? body.roundHits : 0;
-    const roundMisses = Number.isInteger(body.roundMisses) && body.roundMisses >= 0 ? body.roundMisses : 0;
-    void roundMisses; // derived server-side anyway
+  if (action === 'round_complete') {
+    // Record round results
+    const hits = Math.min(roundHits || 0, state.moleCount);
+    const misses = Math.max(0, state.moleCount - hits);
 
-    if (!sessionId || typeof sessionId !== 'string') {
-      return NextResponse.json({ error: 'Invalid session ID' }, { status: 400 });
-    }
+    state.hits += hits;
+    state.misses += misses;
+    state.totalMoles += state.moleCount;
+    state.currentRound++;
 
-    const db = await getDb();
-    const gameSessions = db.collection('game_sessions');
-
-    const session = await gameSessions.findOne({
-      id: sessionId,
-      user_id: user.userId,
-      game: 'moles',
-      completed_at: null,
-    }) as any;
-
-    if (!session) {
-      return NextResponse.json({ error: 'No active session found' }, { status: 404 });
-    }
-
-    let state: any;
-    try {
-      state = JSON.parse(session.state);
-    } catch {
-      return NextResponse.json({ error: 'Corrupted session state' }, { status: 500 });
-    }
-
-    if (action === 'round_complete') {
-      // Record round results
-      const hits = Math.min(roundHits || 0, state.moleCount);
-      const misses = Math.max(0, state.moleCount - hits);
-
-      state.hits += hits;
-      state.misses += misses;
-      state.totalMoles += state.moleCount;
-      state.currentRound++;
-
-      // Check if game is over
-      if (state.currentRound >= state.maxRounds) {
-        return await finalizeGame(db, session, state, user.userId);
-      }
-
-      // Save state and send next round
-      await gameSessions.updateOne(
-        { id: sessionId },
-        { $set: { state: JSON.stringify(state) } }
-      );
-
-      return NextResponse.json({
-        action: 'next_round',
-        currentRound: state.currentRound,
-        molePositions: state.rounds[state.currentRound],
-        hits: state.hits,
-        misses: state.misses,
-        totalMoles: state.totalMoles,
-        roundsLeft: state.maxRounds - state.currentRound,
-        totalHoles: MOLES_HOLES,
-      });
-    }
-
-    if (action === 'end') {
+    // Check if game is over
+    if (state.currentRound >= state.maxRounds) {
       return await finalizeGame(db, session, state, user.userId);
     }
 
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-  } catch (error: any) {
-    if (error.message === 'Unauthorized') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    // Save state and send next round
+    await gameSessions.updateOne(
+      { id: sessionId },
+      { $set: { state: JSON.stringify(state) } }
+    );
+
+    return NextResponse.json({
+      action: 'next_round',
+      currentRound: state.currentRound,
+      molePositions: state.rounds[state.currentRound],
+      hits: state.hits,
+      misses: state.misses,
+      totalMoles: state.totalMoles,
+      roundsLeft: state.maxRounds - state.currentRound,
+      totalHoles: MOLES_HOLES,
+    });
   }
-}
+
+  if (action === 'end') {
+    return await finalizeGame(db, session, state, user.userId);
+  }
+
+  return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+});
 
 async function finalizeGame(db: any, session: any, state: any, userId: number) {
   const gameSessions = db.collection('game_sessions');

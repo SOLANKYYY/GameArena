@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import getDb, { getNextSequence } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { DEFAULT_STARTING_BALANCE } from '@/lib/constants';
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Username already taken' }, { status: 409 });
       }
 
-      const hash = bcrypt.hashSync(password, 10);
+      const hash = await bcrypt.hash(password, 10);
       const serverSeed = generateServerSeed();
       const clientSeed = generateClientSeed();
       const newId = await getNextSequence(db, 'userId');
@@ -108,23 +108,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
     }
     const safeAmount = Math.round(Number(amount) * 100) / 100;
-    const user = await users.findOne({ id: userId }) as any;
-    if (!user) {
+    const newBalance = await db.adjustBalance(userId, action, safeAmount);
+    if (newBalance === undefined) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-
-    let newBalance = user.balance;
-    if (action === 'set') {
-      newBalance = safeAmount;
-    } else if (action === 'add') {
-      newBalance = user.balance + safeAmount;
-    } else if (action === 'deduct') {
-      newBalance = Math.max(0, user.balance - safeAmount);
-    }
-
-    newBalance = Math.round(newBalance * 100) / 100;
-    await users.updateOne({ id: userId }, { $set: { balance: newBalance } });
-
     return NextResponse.json({ success: true, newBalance });
   } catch (error: any) {
     const status = error.message === 'Forbidden' ? 403 : error.message === 'Unauthorized' ? 401 : 500;

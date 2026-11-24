@@ -37,11 +37,17 @@ Production login requires explicit JWT and administrator secrets.
 
 ## Capacity
 
-Start with Vercel Functions plus a Supabase transaction pooler, colocated where
-possible. Twenty-five simultaneous players is the initial test target, not a
-verified guarantee. Before an event, load-test concurrent login, game actions,
-balance updates, and leaderboard reads against a dedicated test database.
-Measure errors, latency, pool saturation, and balance consistency.
+The capacity test signs in 50 distinct players together and runs 1,050 completed
+games across all seven game types. It checks API responses, balances and bet counts
+while players refresh the lobby and leaderboard. It prints p95 and maximum response
+times for the host where it runs.
+
+To reproduce it, point a local production build at a fresh disposable PostgreSQL
+database, set its test-only `ADMIN_PASSWORD` and `JWT_SECRET`, then run
+`npm run build` and `npm start`. In another terminal, set
+`LOAD_TEST_ADMIN_PASSWORD` to the same test password and run
+`node scripts/load-test.mjs`. The test creates teams and starts a round.
+`LOAD_TEST_ORIGIN` defaults to `http://127.0.0.1:3000`.
 
 ## Theme
 

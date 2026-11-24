@@ -197,16 +197,3 @@ export async function incrementNonce(userId: number): Promise<void> {
   const users = db.collection('users');
   await users.updateOne({ id: userId }, { $inc: { nonce: 1 } });
 }
-
-/**
- * Refund a bet amount back to the user — used when session creation fails
- * after bet has already been deducted. FIX #3.
- */
-export async function refundBet(userId: number, amount: number): Promise<void> {
-  const db = await getDb();
-  const users = db.collection('users');
-  await users.updateOne(
-    { id: userId },
-    { $inc: { balance: Math.round(amount * 100) / 100 } }
-  );
-}
