@@ -106,7 +106,7 @@ export default function RulesModal() {
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: '#121c27',
+              background: '#130b1d',
               border: '1px solid rgba(255, 255, 255, 0.07)',
               borderRadius: '24px',
               maxWidth: '680px',
@@ -114,7 +114,7 @@ export default function RulesModal() {
               maxHeight: '88vh',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 0 120px rgba(0, 231, 1, 0.04), 0 25px 60px -12px rgba(0,0,0,0.6)',
+              boxShadow: '0 0 120px rgba(255, 122, 26, 0.04), 0 25px 60px -12px rgba(0,0,0,0.6)',
               overflow: 'hidden',
             }}
           >
@@ -127,8 +127,8 @@ export default function RulesModal() {
                 width: '56px',
                 height: '56px',
                 borderRadius: '16px',
-                background: 'linear-gradient(135deg, rgba(0, 231, 1, 0.12), rgba(125, 255, 103, 0.06))',
-                border: '1px solid rgba(0, 231, 1, 0.15)',
+                background: 'linear-gradient(135deg, rgba(255, 122, 26, 0.12), rgba(255, 163, 71, 0.06))',
+                border: '1px solid rgba(255, 122, 26, 0.15)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -176,9 +176,9 @@ export default function RulesModal() {
                     cursor: 'pointer',
                     transition: 'all 0.25s ease',
                     fontFamily: 'Inter, sans-serif',
-                    background: activeTab === 'rules' ? 'rgba(0, 231, 1, 0.1)' : 'transparent',
-                    color: activeTab === 'rules' ? '#7dff67' : 'rgba(255,255,255,0.4)',
-                    boxShadow: activeTab === 'rules' ? '0 0 0 1px rgba(0,231,1,0.12)' : 'none',
+                    background: activeTab === 'rules' ? 'rgba(255, 122, 26, 0.1)' : 'transparent',
+                    color: activeTab === 'rules' ? '#ffa347' : 'rgba(255,255,255,0.4)',
+                    boxShadow: activeTab === 'rules' ? '0 0 0 1px rgba(255, 122, 26,0.12)' : 'none',
                   }}
                 >
                   📋 Rules & Guidelines
@@ -195,9 +195,9 @@ export default function RulesModal() {
                     cursor: 'pointer',
                     transition: 'all 0.25s ease',
                     fontFamily: 'Inter, sans-serif',
-                    background: activeTab === 'games' ? 'rgba(0, 231, 1, 0.1)' : 'transparent',
-                    color: activeTab === 'games' ? '#7dff67' : 'rgba(255,255,255,0.4)',
-                    boxShadow: activeTab === 'games' ? '0 0 0 1px rgba(0,231,1,0.12)' : 'none',
+                    background: activeTab === 'games' ? 'rgba(255, 122, 26, 0.1)' : 'transparent',
+                    color: activeTab === 'games' ? '#ffa347' : 'rgba(255,255,255,0.4)',
+                    boxShadow: activeTab === 'games' ? '0 0 0 1px rgba(255, 122, 26,0.12)' : 'none',
                   }}
                 >
                   🎮 Game Guide
@@ -273,8 +273,8 @@ export default function RulesModal() {
                           width: '40px',
                           height: '40px',
                           borderRadius: '10px',
-                          background: 'rgba(0, 231, 1, 0.06)',
-                          border: '1px solid rgba(0, 231, 1, 0.08)',
+                          background: 'rgba(255, 122, 26, 0.06)',
+                          border: '1px solid rgba(255, 122, 26, 0.08)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -288,7 +288,7 @@ export default function RulesModal() {
                             <span style={{
                               fontSize: '10px',
                               fontWeight: 800,
-                              color: '#7dff67',
+                              color: '#ffa347',
                               fontFamily: "'Space Grotesk', monospace",
                               opacity: 0.6,
                             }}>
@@ -386,8 +386,8 @@ export default function RulesModal() {
                   width: '100%',
                   padding: '15px',
                   borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #00e701, #7dff67)',
-                  color: '#013a00',
+                  background: 'linear-gradient(135deg, #ff7a1a, #ffa347)',
+                  color: '#2a0f00',
                   fontSize: '15px',
                   fontWeight: 800,
                   border: 'none',
@@ -395,7 +395,7 @@ export default function RulesModal() {
                   transition: 'all 0.3s cubic-bezier(0.2, 0, 0, 1)',
                   fontFamily: 'Inter, sans-serif',
                   letterSpacing: '-0.01em',
-                  boxShadow: '0 0 0 1px rgba(125, 255, 103, 0.15) inset, 0 4px 20px rgba(0, 231, 1, 0.15)',
+                  boxShadow: '0 0 0 1px rgba(255, 163, 71, 0.15) inset, 0 4px 20px rgba(255, 122, 26, 0.15)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

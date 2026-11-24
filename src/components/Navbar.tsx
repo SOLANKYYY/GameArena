@@ -20,8 +20,8 @@ function ArenaLogo() {
     <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="logoGrad" x1="0" y1="0" x2="36" y2="36">
-          <stop offset="0%" stopColor="#00e701" />
-          <stop offset="100%" stopColor="#7dff67" />
+          <stop offset="0%" stopColor="#ff7a1a" />
+          <stop offset="100%" stopColor="#ffa347" />
         </linearGradient>
         <linearGradient id="swordGrad" x1="10" y1="10" x2="26" y2="26">
           <stop offset="0%" stopColor="#ffffff" />
@@ -168,9 +168,9 @@ export default function Navbar() {
                 borderRadius: '12px',
                 fontSize: '13px',
                 fontWeight: 600,
-                background: roundActive ? 'rgba(0, 231, 1, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                border: `1px solid ${roundActive ? 'rgba(0, 231, 1, 0.15)' : 'rgba(239, 68, 68, 0.15)'}`,
-                color: roundActive ? '#7dff67' : '#ffb4ab',
+                background: roundActive ? 'rgba(255, 122, 26, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                border: `1px solid ${roundActive ? 'rgba(255, 122, 26, 0.15)' : 'rgba(239, 68, 68, 0.15)'}`,
+                color: roundActive ? '#ffa347' : '#ffb4ab',
               }}
             >
               <span
@@ -178,15 +178,15 @@ export default function Navbar() {
                   width: '7px',
                   height: '7px',
                   borderRadius: '50%',
-                  background: roundActive ? '#00e701' : '#ef4444',
-                  boxShadow: roundActive ? '0 0 8px rgba(0,231,1,0.5)' : '0 0 8px rgba(239,68,68,0.4)',
+                  background: roundActive ? '#ff7a1a' : '#ef4444',
+                  boxShadow: roundActive ? '0 0 8px rgba(255, 122, 26,0.5)' : '0 0 8px rgba(239,68,68,0.4)',
                   animation: roundActive ? 'pulse-green 2s infinite' : 'none',
                 }}
               />
               {roundActive ? (
                 <>
                   <span>R{round?.round_number}</span>
-                  <span className="font-mono" style={{ color: '#7dff67', fontWeight: 700 }}>
+                  <span className="font-mono" style={{ color: '#ffa347', fontWeight: 700 }}>
                     {formatTime(timeLeft)}
                   </span>
                 </>
@@ -219,22 +219,22 @@ export default function Navbar() {
             <button
               onClick={() => window.dispatchEvent(new Event('openRulesModal'))}
               style={{
-                background: 'rgba(0, 231, 1, 0.06)',
-                border: '1px solid rgba(0, 231, 1, 0.12)',
+                background: 'rgba(255, 122, 26, 0.06)',
+                border: '1px solid rgba(255, 122, 26, 0.12)',
                 borderRadius: '8px',
                 padding: '6px 10px',
                 cursor: 'pointer',
                 fontFamily: 'Inter, sans-serif',
                 fontSize: '13px',
                 fontWeight: 600,
-                color: '#7dff67',
+                color: '#ffa347',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
                 transition: 'all 0.2s ease',
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0, 231, 1, 0.1)'; e.currentTarget.style.borderColor = 'rgba(0, 231, 1, 0.2)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0, 231, 1, 0.06)'; e.currentTarget.style.borderColor = 'rgba(0, 231, 1, 0.12)'; }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255, 122, 26, 0.1)'; e.currentTarget.style.borderColor = 'rgba(255, 122, 26, 0.2)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 122, 26, 0.06)'; e.currentTarget.style.borderColor = 'rgba(255, 122, 26, 0.12)'; }}
             >
               <span>📖</span>
               <span>Rules</span>

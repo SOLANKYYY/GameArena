@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 
 const SEGMENT_COLORS: Record<string, string[]> = {
-  low: ['#00e701', '#1a9e1a', '#115511', '#1a9e1a', '#333', '#1a9e1a', '#115511', '#1a9e1a', '#00e701', '#333'],
+  low: ['#ff7a1a', '#1a9e1a', '#115511', '#1a9e1a', '#333', '#1a9e1a', '#115511', '#1a9e1a', '#ff7a1a', '#333'],
   medium: ['#333', '#4dabf7', '#333', '#1a9e1a', '#333', '#fbbf24', '#333', '#1a9e1a', '#333', '#c084fc'],
   high: ['#333', '#333', '#333', '#333', '#333', '#333', '#333', '#333', '#333', '#fbbf24'],
 };
@@ -39,7 +39,7 @@ export default function WheelPage() {
 
     ctx.clearRect(0, 0, size, size);
     const anglePerSegment = (2 * Math.PI) / segments;
-    const colors = ['#00e701', '#1a9e1a', '#115511', '#4dabf7', '#c084fc', '#fbbf24', '#fb923c', '#22d3ee', '#f472b6', '#333'];
+    const colors = ['#ff7a1a', '#1a9e1a', '#115511', '#4dabf7', '#c084fc', '#fbbf24', '#fb923c', '#22d3ee', '#f472b6', '#333'];
 
     for (let i = 0; i < segments; i++) {
       const start = i * anglePerSegment - Math.PI / 2;
@@ -52,7 +52,7 @@ export default function WheelPage() {
       const payout = payouts[i] ?? 0;
       let color;
       if (payout >= 5) color = '#fbbf24';
-      else if (payout >= 2) color = '#00e701';
+      else if (payout >= 2) color = '#ff7a1a';
       else if (payout >= 1) color = '#1a9e1a';
       else if (payout > 0) color = '#115511';
       else color = '#1a2c38';
@@ -157,7 +157,7 @@ export default function WheelPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '16px', padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
             {/* Pointer */}
-            <div style={{ position: 'absolute', top: '24px', left: '50%', transform: 'translateX(-50%)', zIndex: 10, width: 0, height: 0, borderLeft: '10px solid transparent', borderRight: '10px solid transparent', borderTop: '18px solid var(--accent-green)', filter: 'drop-shadow(0 0 6px rgba(0,231,1,0.4))' }} />
+            <div style={{ position: 'absolute', top: '24px', left: '50%', transform: 'translateX(-50%)', zIndex: 10, width: 0, height: 0, borderLeft: '10px solid transparent', borderRight: '10px solid transparent', borderTop: '18px solid var(--accent-green)', filter: 'drop-shadow(0 0 6px rgba(255, 122, 26,0.4))' }} />
             <div style={{ transform: `rotate(${rotation}deg)`, transition: isSpinning ? 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none' }}>
               <canvas ref={canvasRef} width={320} height={320} style={{ borderRadius: '50%' }} />
             </div>
@@ -178,7 +178,7 @@ export default function WheelPage() {
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Segments</label>
               <div style={{ display: 'flex', gap: '4px' }}>
-                {[10, 20, 30, 40, 50].map(s => (
+                {[11, 6, 18, 40, 50].map(s => (
                   <button key={s} className="quick-btn" onClick={() => setSegments(s)} style={{ flex: 1, fontSize: '12px', ...(segments === s ? { borderColor: 'var(--accent-green)', color: 'var(--accent-green)', background: 'var(--accent-green-dim)' } : {}) }}>{s}</button>
                 ))}
               </div>

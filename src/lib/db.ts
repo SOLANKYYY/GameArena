@@ -4,6 +4,7 @@ import { DEFAULT_STARTING_BALANCE, ALL_GAMES } from './constants';
 import { generateServerSeed, hashServerSeed, generateClientSeed } from './rng';
 
 const MONGODB_URI = process.env.MONGODB_URI as string;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin321';
 const DB_NAME = process.env.DB_NAME || 'GameArenaInfinity';
 
 let client: MongoClient | null = null;
@@ -129,9 +130,13 @@ async function connectAndInit(): Promise<Db> {
   ]);
 
   // Seed admin account if not exists
-  const adminExists = await users.findOne({ username: 'admin' });
+  const adminExists = await users.findOne({ username: 'admin' }) as any;
+  if (adminExists && !bcrypt.compareSync(ADMIN_PASSWORD, adminExists.password_hash)) {
+    // keep the existing admin account in sync with ADMIN_PASSWORD
+    await users.updateOne({ username: 'admin' }, { $set: { password_hash: bcrypt.hashSync(ADMIN_PASSWORD, 10) } });
+  }
   if (!adminExists) {
-    const hash = bcrypt.hashSync('admin123', 10);
+    const hash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
     const serverSeed = generateServerSeed();
     const clientSeed = generateClientSeed();
     const adminId = await getNextSequence(newDb, 'userId');

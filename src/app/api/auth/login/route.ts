@@ -17,10 +17,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Username and password required' }, { status: 400 });
     }
 
-    if (username.toLowerCase() === 'admin') {
-      return NextResponse.json({ error: 'Admin login is disabled via password. Please use your secure admin access link.' }, { status: 403 });
-    }
-
     const db = await getDb();
     const users = db.collection('users');
 

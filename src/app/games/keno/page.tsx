@@ -128,7 +128,7 @@ export default function KenoPage() {
                       aspectRatio: '1', borderRadius: '8px', border, background: bg, color, cursor: isPlaying ? 'default' : 'pointer',
                       fontSize: '14px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontFamily: "'JetBrains Mono', monospace", transition: 'all 0.15s ease',
-                      boxShadow: isMatch ? '0 0 12px rgba(0,231,1,0.3)' : 'none',
+                      boxShadow: isMatch ? '0 0 12px rgba(255, 122, 26,0.3)' : 'none',
                     }}>
                     {num}
                   </motion.button>

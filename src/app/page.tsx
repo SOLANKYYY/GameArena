@@ -69,7 +69,7 @@ export default function HomePage() {
       <div className="lobby-bg-glow lobby-bg-glow-1" />
       <div className="lobby-bg-glow lobby-bg-glow-2" />
 
-      <main className="lobby-main">
+      <main className="lobby-main" id="main-content">
         {/* ═══ HERO SECTION ═══ */}
         <motion.section
           className="lobby-hero"
@@ -78,11 +78,11 @@ export default function HomePage() {
           transition={{ duration: 0.6, ease: [0.2, 0, 0, 1] }}
         >
           <div className="lobby-hero-text">
-            <p className="lobby-hero-label">GAME ARENA</p>
+            <p className="lobby-hero-label">🎃 HOLLOW HOUSE ARENA</p>
             <h1 className="lobby-hero-title">
-              Welcome back, <span className="lobby-hero-name">{user.teamName}</span>
+              The house remembers you, <span className="lobby-hero-name">{user.teamName}</span>
             </h1>
-            <p className="lobby-hero-subtitle">Choose a game and start growing your balance</p>
+            <p className="lobby-hero-subtitle">Choose your curse, and wager before midnight</p>
           </div>
 
           {/* Balance Card - Glassmorphism */}
@@ -180,7 +180,7 @@ export default function HomePage() {
                     <span className="lobby-ticker-amount font-mono">{bet.betAmount.toFixed(2)}</span>
                     <span
                       className="lobby-ticker-result font-mono"
-                      style={{ color: bet.outcome === 'win' ? '#7dff67' : '#ed4163' }}
+                      style={{ color: bet.outcome === 'win' ? '#ffa347' : '#ed4163' }}
                     >
                       {bet.outcome === 'win' ? `+${bet.payout.toFixed(2)}` : `-${bet.betAmount.toFixed(2)}`}
                     </span>

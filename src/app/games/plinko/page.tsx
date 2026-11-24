@@ -132,7 +132,7 @@ export default function PlinkoPage() {
       // Color based on multiplier value
       let baseColor: [number, number, number];
       if (m >= 10)      baseColor = [251, 191, 36];  // gold
-      else if (m >= 3)  baseColor = [0, 231, 1];     // green
+      else if (m >= 3)  baseColor = [255, 122, 26];     // green
       else if (m >= 1)  baseColor = [34, 180, 85];    // dark green
       else              baseColor = [20, 60, 40];     // dim
 
@@ -140,7 +140,7 @@ export default function PlinkoPage() {
       let alpha = 0.85;
       if (highlightBucket === i && flashIntensity > 0) {
         alpha = 1;
-        baseColor = [125, 255, 103]; // bright green flash
+        baseColor = [255, 163, 71]; // bright green flash
         // glow effect
         ctx.save();
         ctx.shadowColor = `rgba(${baseColor[0]},${baseColor[1]},${baseColor[2]}, ${flashIntensity * 0.6})`;
@@ -514,8 +514,8 @@ export default function PlinkoPage() {
                       fontWeight: 600,
                       padding: '2px 4px',
                       borderRadius: '4px',
-                      background: m >= 10 ? 'rgba(251,191,36,0.15)' : m >= 3 ? 'rgba(0,231,1,0.1)' : 'rgba(255,255,255,0.04)',
-                      color: m >= 10 ? '#fbbf24' : m >= 3 ? '#00e701' : '#557086',
+                      background: m >= 10 ? 'rgba(251,191,36,0.15)' : m >= 3 ? 'rgba(255, 122, 26,0.1)' : 'rgba(255,255,255,0.04)',
+                      color: m >= 10 ? '#fbbf24' : m >= 3 ? '#ff7a1a' : '#557086',
                     }}
                   >
                     {m}×

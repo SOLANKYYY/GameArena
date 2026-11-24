@@ -92,7 +92,7 @@ export default function DicePage() {
             <div style={{ width: '100%', marginTop: '32px' }}>
               <div style={{ position: 'relative', height: '8px', borderRadius: '4px', background: 'var(--bg-primary)', marginBottom: '8px' }}>
                 <div style={{ position: 'absolute', left: condition === 'over' ? `${target}%` : '0', right: condition === 'over' ? '0' : `${100 - target}%`, top: 0, bottom: 0, borderRadius: '4px', background: 'var(--accent-green)', opacity: 0.4 }} />
-                {result && <div style={{ position: 'absolute', left: `${result.roll}%`, top: '-4px', width: '16px', height: '16px', borderRadius: '50%', background: result.won ? 'var(--accent-green)' : 'var(--accent-red)', transform: 'translateX(-50%)', boxShadow: result.won ? '0 0 12px rgba(0,231,1,0.5)' : '0 0 12px rgba(237,65,99,0.5)' }} />}
+                {result && <div style={{ position: 'absolute', left: `${result.roll}%`, top: '-4px', width: '16px', height: '16px', borderRadius: '50%', background: result.won ? 'var(--accent-green)' : 'var(--accent-red)', transform: 'translateX(-50%)', boxShadow: result.won ? '0 0 12px rgba(255, 122, 26,0.5)' : '0 0 12px rgba(237,65,99,0.5)' }} />}
               </div>
               <input type="range" min="1" max="99" step="1" value={target} onChange={(e) => setTarget(parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent-green)' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>

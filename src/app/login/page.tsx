@@ -11,8 +11,8 @@ function ArenaLogoLarge() {
     <svg width="64" height="64" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="logoGradLg" x1="0" y1="0" x2="36" y2="36">
-          <stop offset="0%" stopColor="#00e701" />
-          <stop offset="100%" stopColor="#7dff67" />
+          <stop offset="0%" stopColor="#ff7a1a" />
+          <stop offset="100%" stopColor="#ffa347" />
         </linearGradient>
       </defs>
       <rect width="36" height="36" rx="10" fill="url(#logoGradLg)" />
@@ -61,7 +61,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="login-root">
+    <div className="login-root" id="main-content" role="main">
       {/* Background effects */}
       <div className="login-bg-glow login-bg-glow-1" />
       <div className="login-bg-glow login-bg-glow-2" />
@@ -78,16 +78,17 @@ export default function LoginPage() {
           <div className="login-logo-glow">
             <ArenaLogoLarge />
           </div>
-          <h1 className="login-title">Game Arena</h1>
-          <p className="login-subtitle">Sign in to start playing</p>
+          <h1 className="login-title">Curse the Code</h1>
+          <p className="login-subtitle">Enter, if you dare… the house is waiting</p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="login-form">
           <div className="login-field">
-            <label className="login-label">Username</label>
+            <label htmlFor="login-username" className="login-label">Username</label>
             <input
               id="login-username"
+              autoComplete="username"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -98,9 +99,10 @@ export default function LoginPage() {
           </div>
 
           <div className="login-field" style={{ marginBottom: '28px' }}>
-            <label className="login-label">Password</label>
+            <label htmlFor="login-password" className="login-label">Password</label>
             <input
               id="login-password"
+              autoComplete="current-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

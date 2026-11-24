@@ -85,7 +85,7 @@ export default function LimboPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '16px', padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '300px', position: 'relative', overflow: 'hidden' }}>
             {result && (
-              <div style={{ position: 'absolute', inset: 0, background: result.won ? 'radial-gradient(circle at center, rgba(0,231,1,0.1) 0%, transparent 70%)' : 'radial-gradient(circle at center, rgba(237,65,99,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', inset: 0, background: result.won ? 'radial-gradient(circle at center, rgba(255, 122, 26,0.1) 0%, transparent 70%)' : 'radial-gradient(circle at center, rgba(237,65,99,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
             )}
             <AnimatePresence mode="wait">
               {isAnimating || result ? (
