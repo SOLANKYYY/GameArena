@@ -1,56 +1,65 @@
-# GameArena — Hollow House
+# GameArena · Hollow House
 
-SOLANKYYY's fork of h4ckt0zit3/GameArena, with a gothic Halloween theme.
-Seven games, team accounts, an admin dashboard, and an event leaderboard.
-This is an arena-coin event game, not a real-money payment platform.
+Hollow House is a Halloween-themed tournament arcade maintained by **SOLANKYYY**. Teams start with 1,000 virtual Arena Coins and compete to finish a timed round with the highest balance. The organizer controls the clock, game availability and team accounts.
 
-## Run locally
+**[Enter Hollow House](https://gamearena-hollow-house.vercel.app/login)** · [Event rules](rules.txt) · [50-player test results](docs/capacity.md)
 
-1. Run `npm ci`.
-2. Create an untracked `.env.local` file using the configuration below.
-3. Run `npm run dev` and open http://localhost:3000.
-4. Sign in as `admin` using your configured `ADMIN_PASSWORD`, then create teams.
+<img src="public/hollow-house.svg" width="420" alt="The haunted house used on the GameArena sign-in screen">
 
-## Vercel and Supabase
+## Running an event
 
-Import `SOLANKYYY/GameArena` into Vercel as a Next.js project. The `master`
-branch is production. Next.js route handlers provide the backend; a separate
-API server is not required.
+1. The organizer signs in as `admin`, creates one account per team and distributes the credentials.
+2. Teams sign in and wait for the organizer to start a timed round.
+3. Players choose Dice, Limbo, Wheel, Keno, Plinko, Mines or Moles. Each play updates the team's balance and history.
+4. The organizer can follow active sessions, review the leaderboard and export the event's bet history as CSV.
 
-Configure these server-only environment variables in Vercel:
+## What changed in this edition
 
-| Variable | Purpose |
+| Area | Implementation |
 | --- | --- |
-| `DATABASE_URL` | A dedicated Supabase database transaction-pooler connection URI from the dashboard Connect panel. |
-| `JWT_SECRET` | A unique, randomly generated authentication secret of at least 32 bytes. |
-| `ADMIN_PASSWORD` | A unique strong password for the admin account. |
-| `ADMIN_KEY` | Optional random secret for magic admin login. Omit to disable that endpoint. |
-| `DB_POOL_MAX` | Optional per-process pool limit, initially 5. |
-
-Never prefix database credentials or authentication secrets with `NEXT_PUBLIC_`.
-Do not commit secrets. Use a separate database from unrelated projects.
-The trusted server database role initializes the tables on first use and must
-have schema creation privileges and RLS bypass (the Supabase postgres role).
-Row-level security is enabled without browser-facing policies: access is via
-authenticated Next.js endpoints, not the Supabase public Data API.
-Production login requires explicit JWT and administrator secrets.
+| Hollow House interface | A gothic sign-in page, illustrated house, themed game lobby and reduced-motion support. |
+| Hosting and database | Next.js serves the interface and API on Vercel. The production configuration selects Mumbai and connects to Supabase PostgreSQL through its transaction pooler with TLS certificate verification. |
+| Admin access | Vercel holds the password and JWT signing secret. The app stores a password hash and synchronizes the admin account during initialization. |
+| Concurrent play | Each game action takes a database lock for that player. Balance changes, session updates and the game record commit together. Different teams can play concurrently. |
+| Busy event screens | Password verification uses background workers. PostgreSQL calculates leaderboard totals and fetches recent plays with team names. Cold starts skip schema setup when tables and indexes are ready. |
 
 ## Capacity
 
-The capacity test signs in 50 distinct players together and runs 1,050 completed
-games across all seven game types. It checks API responses, balances and bet counts
-while players refresh the lobby and leaderboard. It prints p95 and maximum response
-times for the host where it runs.
+In an isolated production-build test, **50 players signed in together and completed 1,050 games across all seven game types**. All recorded play counts and final balances matched. The 95th-percentile response time was **702 ms for sign-in** and **129 ms for game actions** on that test host. The report also documents a separate read-only check of the public deployment.
 
-To reproduce it, point a local production build at a fresh disposable PostgreSQL
-database, set its test-only `ADMIN_PASSWORD` and `JWT_SECRET`, then run
-`npm run build` and `npm start`. In another terminal, set
-`LOAD_TEST_ADMIN_PASSWORD` to the same test password and run
-`node scripts/load-test.mjs`. The test creates teams and starts a round.
-`LOAD_TEST_ORIGIN` defaults to `http://127.0.0.1:3000`.
+[Measurements and test method](docs/capacity.md) · [Repeatable test script](scripts/load-test.mjs)
 
-## Theme
+## Run locally
 
-`src/app/haunting.css` contains the responsive gothic theme. The original
-haunted-house artwork is `public/hollow-house.svg`. Motion respects the
-system reduced-motion setting.
+Use Node.js 24 and a dedicated PostgreSQL database. The database role needs permission to create tables and indexes in the app schema and manage its game tables.
+
+```sh
+npm ci
+cp .env.example .env.local
+```
+
+Fill in the three required values in `.env.local`, then run `npm run dev` and visit [the local sign-in page](http://localhost:3000/login). For a production build, run `npm run build` followed by `npm start`.
+
+| Server variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection URI. On Vercel use the Supabase transaction pooler and the bundled root certificate. |
+| `JWT_SECRET` | Random signing secret of at least 32 bytes. |
+| `ADMIN_PASSWORD` | Password for the application's `admin` account. |
+| `DB_POOL_MAX` | Optional maximum database connections per app process. The default is five. |
+| `ADMIN_KEY` | Optional secret for the separate admin-link sign-in feature. An empty value disables it. |
+
+Vercel deploys the `master` branch. Set production values in the Vercel project's environment settings, then redeploy. The production database login owns the six GameArena tables, with row-level security enabled. Players access them through the app's authenticated routes.
+
+## Files worth opening
+
+| File | Contents |
+| --- | --- |
+| [Game routes](src/app/api/games) | The rules and request handlers for all seven games. |
+| [Player transactions](src/lib/playerAction.ts) and [database layer](src/lib/db.ts) | How player actions share a database transaction and how balances and rankings are read. |
+| [Deployment settings](vercel.json) and [public database CA](certs/supabase-root-2021.crt) | Vercel region and the certificate used to verify Supabase. |
+| [Environment template](.env.example) | Placeholder settings for a local copy. |
+| [House artwork](public/hollow-house.svg) and [theme styles](src/app/haunting.css) | The visual identity used by this edition. |
+
+## Credits
+
+SOLANKYYY maintains this deployment and its event-specific changes. The project builds on [h4ckt0zit3/GameArena](https://github.com/h4ckt0zit3/GameArena).

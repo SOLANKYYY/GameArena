@@ -2,6 +2,7 @@
   "name": "game-arena-app",
   "version": "0.1.0",
   "private": true,
+  "description": "Halloween tournament arcade with seven games, timed team rounds and a live leaderboard, built with Next.js and Supabase.",
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
