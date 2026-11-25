@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { showGameBoard } from '@/lib/showGameBoard';
 import Navbar from '@/components/Navbar';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -59,6 +60,7 @@ export default function KenoPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      showGameBoard();
 
       // Animate number reveal one at a time
       setIsRevealing(true);
@@ -100,16 +102,16 @@ export default function KenoPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <main style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px' }}>
+      <main id="main-content" className="game-page game-keno" style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px' }}>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '6px' }}>🎯 Keno</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '32px' }}>Pick up to 10 numbers. Match the draws to win!</p>
         </motion.div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: '24px' }} className="game-grid-2col">
           {/* Number Grid */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          <motion.div id="game-board" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '6px', marginBottom: '16px' }}>
+            <div className="keno-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '6px', marginBottom: '16px' }}>
               {Array.from({ length: 40 }, (_, i) => i + 1).map(num => {
                 const isPicked = picks.includes(num);
                 const isRevealed = revealedNumbers.includes(num);
@@ -123,7 +125,7 @@ export default function KenoPage() {
                 else if (isPicked) { bg = 'var(--accent-blue-dim)'; border = '2px solid var(--accent-blue)'; color = 'var(--accent-blue)'; }
                 return (
                   <motion.button key={num} whileHover={!isPlaying && !isRevealing ? { scale: 1.08 } : {}} whileTap={!isPlaying && !isRevealing ? { scale: 0.95 } : {}}
-                    onClick={() => togglePick(num)}
+                    aria-pressed={isPicked} onClick={() => togglePick(num)}
                     style={{
                       aspectRatio: '1', borderRadius: '8px', border, background: bg, color, cursor: isPlaying ? 'default' : 'pointer',
                       fontSize: '14px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',

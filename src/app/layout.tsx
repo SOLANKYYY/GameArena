@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./haunting.css";
+import "./mobile.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import SpookyDecor from "@/components/SpookyDecor";
 import { Toaster } from "react-hot-toast";

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { showGameBoard } from '@/lib/showGameBoard';
 import Navbar from '@/components/Navbar';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -88,7 +89,7 @@ export default function WheelPage() {
     ctx.strokeStyle = 'var(--border)';
     ctx.lineWidth = 2;
     ctx.stroke();
-  }, [segments, risk, payouts, result, isSpinning]);
+  }, [segments, risk, payouts, result, isSpinning, loading]);
 
   // Update payouts when config changes
   useEffect(() => {
@@ -117,6 +118,7 @@ export default function WheelPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      showGameBoard();
 
       const segAngle = 360 / segments;
       // The pointer is at 12 o'clock (top). Canvas segment 0 starts at 12 o'clock.
@@ -148,17 +150,17 @@ export default function WheelPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
+      <main id="main-content" className="game-page game-wheel" style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '6px' }}>🎡 Wheel</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '32px' }}>Spin the wheel and land on a multiplier!</p>
         </motion.div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '24px' }} className="game-grid-2col">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          <motion.div id="game-board" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '16px', padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
             {/* Pointer */}
             <div style={{ position: 'absolute', top: '24px', left: '50%', transform: 'translateX(-50%)', zIndex: 10, width: 0, height: 0, borderLeft: '10px solid transparent', borderRight: '10px solid transparent', borderTop: '18px solid var(--accent-green)', filter: 'drop-shadow(0 0 6px rgba(255, 122, 26,0.4))' }} />
-            <div style={{ transform: `rotate(${rotation}deg)`, transition: isSpinning ? 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none' }}>
+            <div className="wheel-disc" style={{ transform: `rotate(${rotation}deg)`, transition: isSpinning ? 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none' }}>
               <canvas ref={canvasRef} width={320} height={320} style={{ borderRadius: '50%' }} />
             </div>
             {result && !isSpinning && (

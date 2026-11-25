@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { showGameBoard } from '@/lib/showGameBoard';
 import Navbar from '@/components/Navbar';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -222,7 +223,7 @@ export default function PlinkoPage() {
     setup();
     window.addEventListener('resize', setup);
     return () => window.removeEventListener('resize', setup);
-  }, [pins, risk, setupCanvas, renderBoard]);
+  }, [pins, risk, setupCanvas, renderBoard, loading]);
 
   // ── Smooth animation loop using requestAnimationFrame ──
   const animateBall = useCallback((
@@ -339,6 +340,7 @@ export default function PlinkoPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      showGameBoard();
 
       // Build ball path waypoints
       const canvas = canvasRef.current!;
@@ -377,7 +379,7 @@ export default function PlinkoPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <main style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px' }}>
+      <main id="main-content" className="game-page game-plinko" style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px' }}>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '6px' }}>📍 Plinko</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '32px' }}>
@@ -387,7 +389,7 @@ export default function PlinkoPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '24px' }} className="game-grid-2col">
           {/* ── Canvas Board ── */}
-          <motion.div
+          <motion.div id="game-board"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}

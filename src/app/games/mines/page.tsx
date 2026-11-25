@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { showGameBoard } from '@/lib/showGameBoard';
 import Navbar from '@/components/Navbar';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -41,6 +42,7 @@ export default function MinesPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      showGameBoard();
       setSessionId(data.sessionId);
       updateBalance(data.newBalance);
     } catch (err: any) { toast.error(err.message); setIsPlaying(false); }
@@ -102,19 +104,19 @@ export default function MinesPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
+      <main id="main-content" className="game-page game-mines" style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '6px' }}>💎 Mines</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '32px' }}>Reveal gems, avoid mines. Cash out anytime!</p>
         </motion.div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '24px' }} className="game-grid-2col">
           {/* Grid */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          <motion.div id="game-board" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '16px', padding: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px', maxWidth: '400px', margin: '0 auto' }}>
               {grid.map((cell, i) => (
                 <motion.button key={i} whileHover={cell === 'hidden' && isPlaying && !gameOver ? { scale: 1.05 } : {}} whileTap={cell === 'hidden' && isPlaying && !gameOver ? { scale: 0.95 } : {}}
-                  onClick={() => handleReveal(i)} disabled={cell !== 'hidden' || !isPlaying || gameOver}
+                  aria-label={`Tile ${i + 1}, ${cell}`} onClick={() => handleReveal(i)} disabled={cell !== 'hidden' || !isPlaying || gameOver}
                   style={{
                     aspectRatio: '1', borderRadius: '10px', cursor: cell === 'hidden' && isPlaying ? 'pointer' : 'default',
                     fontSize: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',

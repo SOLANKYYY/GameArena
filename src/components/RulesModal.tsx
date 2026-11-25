@@ -97,6 +97,7 @@ export default function RulesModal() {
             backdropFilter: 'blur(12px)',
             padding: '20px',
           }}
+          className="rules-backdrop"
           onClick={close}
         >
           <motion.div
@@ -104,6 +105,7 @@ export default function RulesModal() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="rules-dialog" role="dialog" aria-modal="true" aria-labelledby="rules-heading"
             onClick={(e) => e.stopPropagation()}
             style={{
               background: '#130b1d',
@@ -137,7 +139,7 @@ export default function RulesModal() {
               }}>
                 ⚔️
               </div>
-              <h2 style={{
+              <h2 id="rules-heading" style={{
                 fontSize: '26px',
                 fontWeight: 800,
                 color: '#ffffff',

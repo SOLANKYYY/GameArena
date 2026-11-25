@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { showGameBoard } from '@/lib/showGameBoard';
 import Navbar from '@/components/Navbar';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -45,6 +46,7 @@ export default function MolesPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      showGameBoard();
       setSessionId(data.sessionId);
       setMaxRounds(data.maxRounds);
       setCurrentRound(0);
@@ -135,14 +137,14 @@ export default function MolesPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
+      <main id="main-content" className="game-page game-moles" style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '6px' }}>🔨 Moles</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '32px' }}>Whack the moles! Higher hit rate = bigger payout.</p>
         </motion.div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '24px' }} className="game-grid-2col">
           {/* Game Board */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          <motion.div id="game-board" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '16px', padding: '24px' }}>
             {/* Timer bar */}
             {gamePhase === 'playing' && (
@@ -158,7 +160,7 @@ export default function MolesPage() {
                 const isMiss = isClicked && !isMole;
                 return (
                   <motion.button key={i} whileHover={gamePhase === 'playing' && !isClicked ? { scale: 1.08 } : {}} whileTap={gamePhase === 'playing' && !isClicked ? { scale: 0.9 } : {}}
-                    onClick={() => handleHoleClick(i)} disabled={gamePhase !== 'playing' || isClicked}
+                    aria-label={`Hole ${i + 1}, ${isMole ? "mole" : "empty"}`} onClick={() => handleHoleClick(i)} disabled={gamePhase !== 'playing' || isClicked}
                     style={{
                       aspectRatio: '1', borderRadius: '50%', fontSize: '28px',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: gamePhase === 'playing' && !isClicked ? 'pointer' : 'default',

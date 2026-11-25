@@ -18,6 +18,7 @@ Hollow House is a Halloween-themed tournament arcade maintained by **SOLANKYYY**
 | Area | Implementation |
 | --- | --- |
 | Hollow House interface | A gothic sign-in page, illustrated house, themed game lobby and reduced-motion support. |
+| Phone play | Open Menu to switch games or read the rules. The balance and round timer stay in the header. Starting a game brings its board into view on narrow screens. |
 | Hosting and database | Next.js serves the interface and API on Vercel. The production configuration selects Mumbai and connects to Supabase PostgreSQL through its transaction pooler with TLS certificate verification. |
 | Admin access | Vercel holds the password and JWT signing secret. The app stores a password hash and synchronizes the admin account during initialization. |
 | Concurrent play | Each game action takes a database lock for that player. Balance changes, session updates and the game record commit together. Different teams can play concurrently. |

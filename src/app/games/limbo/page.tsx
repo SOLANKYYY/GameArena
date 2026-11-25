@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { showGameBoard } from '@/lib/showGameBoard';
 import Navbar from '@/components/Navbar';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -57,6 +58,7 @@ export default function LimboPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      showGameBoard();
       animateMultiplier(data.resultMultiplier, () => {
         setResult(data);
         updateBalance(data.newBalance);
@@ -74,7 +76,7 @@ export default function LimboPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
+      <main id="main-content" className="game-page game-limbo" style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px' }}>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '6px' }}>🚀 Limbo</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '32px' }}>Set a target multiplier. If the crash point is higher, you win!</p>
@@ -82,7 +84,7 @@ export default function LimboPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }} className="game-grid-2col">
           {/* Game Display */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          <motion.div id="game-board" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '16px', padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '300px', position: 'relative', overflow: 'hidden' }}>
             {result && (
               <div style={{ position: 'absolute', inset: 0, background: result.won ? 'radial-gradient(circle at center, rgba(255, 122, 26,0.1) 0%, transparent 70%)' : 'radial-gradient(circle at center, rgba(237,65,99,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
@@ -124,7 +126,7 @@ export default function LimboPage() {
             <div style={{ marginBottom: '24px' }}>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Target Multiplier</label>
               <input type="number" value={targetMultiplier} onChange={(e) => setTargetMultiplier(e.target.value)} min="1.01" step="0.1" className="input-dark" />
-              <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+              <div className="limbo-presets" style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
                 {['1.5', '2', '3', '5', '10', '50', '100'].map(v => (
                   <button key={v} className="quick-btn" onClick={() => setTargetMultiplier(parseFloat(v).toFixed(2))}
                     style={{ flex: 1, padding: '6px', fontSize: '11px', ...(targetMultiplier === parseFloat(v).toFixed(2) ? { borderColor: 'var(--accent-green)', color: 'var(--accent-green)', background: 'var(--accent-green-dim)' } : {}) }}>
